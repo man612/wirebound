@@ -1,5 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* === TEMA KUSTOM === */
 @theme {
@@ -31,7 +31,7 @@
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
-  
+
   --accent-green: #22c55e;
   --accent-green-dim: #f0fdf4;
   --accent-red: #ef4444;
@@ -40,7 +40,6 @@
   --accent-teal: #14b8a6;
   --accent-yellow: #f59e0b;
 }
-
 
 [data-theme='dark'] {
   --bg-primary: #09090b;
@@ -64,57 +63,126 @@
 
 /* === ANIMASI WIREBOUND === */
 @keyframes slideUpFade {
-  0% { opacity: 0; transform: translateY(16px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes scaleInFade {
-  0% { opacity: 0; transform: scale(0.96); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 @keyframes shimmer {
-  0% { transform: translateX(-100%) skewX(12deg); }
-  100% { transform: translateX(200%) skewX(12deg); }
+  0% {
+    transform: translateX(-100%) skewX(12deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(12deg);
+  }
 }
 
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes fadeInScale {
-  from { opacity: 0; transform: scale(0.97); transform-origin: top; }
-  to { opacity: 1; transform: scale(1); transform-origin: top; }
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+    transform-origin: top;
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    transform-origin: top;
+  }
 }
 @keyframes modalEnter {
-  from { opacity: 0; transform: scale(0.95) translateY(10px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
-.animate-slide-up { animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-.animate-scale-in { animation: scaleInFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-.animate-float { animation: float 6s ease-in-out infinite; }
-.animate-shimmer { animation: shimmer 1.5s infinite; }
+.animate-slide-up {
+  animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.animate-scale-in {
+  animation: scaleInFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-shimmer {
+  animation: shimmer 1.5s infinite;
+}
 
-.animate-page-enter { animation: fadeSlideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-.animate-dropdown { animation: fadeInScale 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-.animate-modal-enter { animation: modalEnter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.animate-page-enter {
+  animation: fadeSlideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.animate-dropdown {
+  animation: fadeInScale 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.animate-modal-enter {
+  animation: modalEnter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
 
-.theme-transition { transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease; }
-.state-morph { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.theme-transition {
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease;
+}
+.state-morph {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-.liquid-path { transition: d 1s linear; }
-
+.liquid-path {
+  transition: d 1s linear;
+}
 
 /* === BASE === */
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
   background-color: var(--bg-surface);
   color: var(--text-primary);
 }
@@ -122,7 +190,6 @@ html, body, #root {
 body {
   transition: background-color 0.5s ease;
 }
-
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;

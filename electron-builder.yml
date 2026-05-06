@@ -8,9 +8,18 @@ extraResources:
     to: gnirehtet-rust-win64
   - from: platform-tools
     to: platform-tools
+  - from: src/renderer/src/assets/icon.png
+    to: icon.png
 files:
   - '!**/.vscode/*'
+  - '!dist/**'
+  - '!gnirehtet-rust-win64/**'
+  - '!platform-tools/**'
   - '!src/*'
+  - '!*.exe'
+  - '!*.blockmap'
+  - '!*.zip'
+  - '!*.7z'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
@@ -19,8 +28,11 @@ asarUnpack:
   - resources/**
 win:
   executableName: wirebound
+  icon: build/icon.ico
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always

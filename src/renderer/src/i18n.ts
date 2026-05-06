@@ -4,7 +4,7 @@ export const translations = {
   en: {
     // Onboarding
     welcome: 'Welcome to Wirebound',
-    onboardingDesc: 'Share your computer\'s internet connection with Android devices via USB.',
+    onboardingDesc: "Share your computer's internet connection with Android devices via USB.",
     chooseLanguage: 'Choose Language',
     chooseTheme: 'Choose Theme',
     lightTheme: 'Light',
@@ -21,22 +21,23 @@ export const translations = {
     dashboard: 'Dashboard',
     settings: 'Settings',
     terminal: 'Terminal Logs',
-    
+
     // Status
     disconnected: 'Disconnected',
     connecting: 'Connecting...',
     connected: 'Connected',
     error: 'Connection Error',
-    
+
     // Actions
     start: 'Start Connection',
     stop: 'Stop Connection',
-    
+
     // Traffic
     trafficMonitor: 'Traffic Monitor',
     download: 'Download',
     upload: 'Upload',
     gathering: 'Gathering data...',
+    noActiveConnection: 'No active connection',
     // Settings
     networkConfig: 'Network Configuration',
     environment: 'Environment',
@@ -50,7 +51,7 @@ export const translations = {
     langLabel: 'Display Language',
     relayPort: 'Relay Port',
     portDesc: 'The local port used for the relay server',
-    
+
     // UI Elements
     terminalLabel: 'Terminal Logs',
     clear: 'Clear',
@@ -59,7 +60,7 @@ export const translations = {
     model: 'Model',
     power: 'Power',
     actions: 'Actions',
-    
+
     // About
     about: 'About Wirebound',
     developer: 'Developer',
@@ -86,17 +87,17 @@ export const translations = {
     dashboard: 'Dasbor',
     settings: 'Pengaturan',
     terminal: 'Log Terminal',
-    
+
     // Status
     disconnected: 'Terputus',
     connecting: 'Menghubungkan...',
     connected: 'Terhubung',
     error: 'Koneksi Error',
-    
+
     // Actions
     start: 'Mulai Koneksi',
     stop: 'Hentikan Koneksi',
-    
+
     // Traffic
     trafficMonitor: 'Monitor Lalu Lintas',
     download: 'Unduh',
@@ -117,7 +118,7 @@ export const translations = {
     langLabel: 'Bahasa Tampilan',
     relayPort: 'Port Relay',
     portDesc: 'Port lokal yang digunakan untuk server relay',
-    
+
     // UI Elements
     terminalLabel: 'Log Terminal',
     clear: 'Bersihkan',
@@ -126,14 +127,14 @@ export const translations = {
     model: 'Model',
     power: 'Daya',
     actions: 'Aksi',
-    
+
     // About
     about: 'Tentang Wirebound',
     developer: 'Pengembang',
     githubRepo: 'GitHub',
     creditsDesc: 'GUI desktop untuk reverse tethering Gnirehtet.'
   }
-
 }
 
 export type TranslationKey = keyof typeof translations.en
+export type Translation = typeof translations.en

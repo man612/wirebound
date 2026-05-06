@@ -10,7 +10,7 @@ import { translations } from './i18n'
 
 function App(): React.JSX.Element {
   const [activePage, setActivePage] = useState<'dashboard' | 'settings'>('dashboard')
-  const { status, logs, start, stop, clearLogs } = useGnirehtet()
+  const { status, logs, isLoading, start, stop, clearLogs } = useGnirehtet()
   const { devices } = useDevices()
   const { settings, updateSettings, loaded } = useSettings()
   const isConnected = status === 'connected'
@@ -18,25 +18,32 @@ function App(): React.JSX.Element {
 
   const t = translations[(settings?.language as Language) || 'en']
 
-  const handleStart = async () => {
-    console.log('App: handleStart triggered')
+  const handleStart = async (): Promise<void> => {
     const dns = settings.dns === 'custom' ? settings.customDns : settings.dns
     const port = settings.port || '31416'
     const res = await start(dns || '8.8.8.8', port)
-    console.log('App: start result:', res)
+
+    if (!res.success) {
+      console.warn('Failed to start Wirebound.', res.error)
+    }
   }
 
-  const handleStop = async () => {
-    console.log('App: handleStop triggered')
+  const handleStop = async (): Promise<void> => {
     const res = await stop()
-    console.log('App: stop result:', res)
+
+    if (!res.success) {
+      console.warn('Failed to stop Wirebound.', res.error)
+    }
   }
 
-  const handleCompleteOnboarding = async (lang: Language, theme: 'light' | 'dark') => {
+  const handleCompleteOnboarding = async (
+    lang: Language,
+    theme: 'light' | 'dark'
+  ): Promise<void> => {
     await updateSettings({ theme, language: lang, onboardingCompleted: true })
     document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.classList.toggle('dark', theme === 'dark')
   }
-
 
   // Sync theme on load
   useEffect(() => {
@@ -55,24 +62,20 @@ function App(): React.JSX.Element {
 
   return (
     <div className="w-screen h-screen flex overflow-hidden font-sans text-text-primary bg-bg-surface selection:bg-blue-600/30 theme-transition">
-
-
       <TitleBar />
 
-      {!settings.onboardingCompleted && (
-        <OnboardingScreen onComplete={handleCompleteOnboarding} />
-      )}
+      {!settings.onboardingCompleted && <OnboardingScreen onComplete={handleCompleteOnboarding} />}
 
       {settings.onboardingCompleted && (
         <>
-          <Sidebar activePage={activePage} onNavigate={setActivePage} />
+          <Sidebar activePage={activePage} onNavigate={setActivePage} t={t} />
           <main className="flex-grow relative overflow-hidden bg-bg-surface pt-8 theme-transition">
-
             {/* Transition key mereset state animasi agar perpindahan view terasa mulus */}
             <div key={activePage} className="h-full">
               {activePage === 'dashboard' && (
-                <Dashboard 
+                <Dashboard
                   status={status}
+                  isLoading={isLoading}
                   onStart={handleStart}
                   onStop={handleStop}
                   devices={devices}
@@ -83,11 +86,7 @@ function App(): React.JSX.Element {
                 />
               )}
               {activePage === 'settings' && (
-                <Settings 
-                  settings={settings} 
-                  updateSettings={updateSettings} 
-                  t={t}
-                />
+                <Settings settings={settings} updateSettings={updateSettings} t={t} />
               )}
             </div>
           </main>
@@ -96,6 +95,5 @@ function App(): React.JSX.Element {
     </div>
   )
 }
-
 
 export default App

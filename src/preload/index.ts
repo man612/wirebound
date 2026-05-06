@@ -4,11 +4,14 @@ import type { GnirehtetAPI } from '../shared/types'
 const api: GnirehtetAPI = {
   startGnirehtet: (dns: string, port: string) => ipcRenderer.invoke('gnirehtet:start', dns, port),
   stopGnirehtet: () => ipcRenderer.invoke('gnirehtet:stop'),
+  getStatus: () => ipcRenderer.invoke('gnirehtet:status'),
   getDevices: () => ipcRenderer.invoke('adb:devices'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
   testSpeedOnDevice: (deviceId: string) => ipcRenderer.invoke('adb:testSpeed', deviceId),
-  windowControl: (action: 'minimize' | 'maximize' | 'close') => ipcRenderer.send('window:control', action),
+  openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
+  windowControl: (action: 'minimize' | 'maximize' | 'close') =>
+    ipcRenderer.send('window:control', action),
   onLog: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, entry: unknown): void => {
       callback(entry as Parameters<typeof callback>[0])
@@ -45,6 +48,6 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore
-  window.api = api
+  const preloadWindow = window as Window & typeof globalThis & { api: GnirehtetAPI }
+  preloadWindow.api = api
 }

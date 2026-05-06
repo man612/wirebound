@@ -9,6 +9,12 @@ export interface AdbDevice {
 // Types for Gnirehtet connection status
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
+// Standard result returned by main-process actions
+export interface ActionResult {
+  success: boolean
+  error?: string
+}
+
 // Types for application settings
 export interface AppSettings {
   dns: string
@@ -36,12 +42,14 @@ export interface TrafficDataPoint {
 
 // API exposed to the renderer via contextBridge
 export interface GnirehtetAPI {
-  startGnirehtet: (dns: string, port: string) => Promise<{ success: boolean; error?: string }>
-  stopGnirehtet: () => Promise<{ success: boolean; error?: string }>
+  startGnirehtet: (dns: string, port: string) => Promise<ActionResult>
+  stopGnirehtet: () => Promise<ActionResult>
+  getStatus: () => Promise<ConnectionStatus>
   getDevices: () => Promise<AdbDevice[]>
   getSettings: () => Promise<AppSettings>
-  saveSettings: (settings: AppSettings) => Promise<void>
-  testSpeedOnDevice: (deviceId: string) => Promise<boolean>
+  saveSettings: (settings: AppSettings) => Promise<AppSettings>
+  testSpeedOnDevice: (deviceId: string) => Promise<ActionResult>
+  openExternal: (url: string) => Promise<ActionResult>
   windowControl: (action: 'minimize' | 'maximize' | 'close') => void
   onLog: (callback: (entry: LogEntry) => void) => () => void
   onStatusChange: (callback: (status: ConnectionStatus) => void) => () => void
