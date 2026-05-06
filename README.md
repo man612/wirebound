@@ -6,7 +6,7 @@
 ![Electron](https://img.shields.io/badge/Electron-v39.x-47848F?style=for-the-badge&logo=electron)
 ![React](https://img.shields.io/badge/React-v19.x-61DAFB?style=for-the-badge&logo=react)
 
-**Wirebound** is a premium Windows desktop GUI for [Gnirehtet](https://github.com/Genymobile/gnirehtet), providing a powerful management interface for reverse tethering. It allows Android devices to use a computer's internet connection via USB—**without requiring root access**.
+Wirebound is a Windows desktop GUI for [Gnirehtet](https://github.com/Genymobile/gnirehtet), providing a management interface for reverse tethering. It allows Android devices to use a computer's internet connection via USB without requiring root access.
 
 ---
 
@@ -19,59 +19,55 @@
 
 ---
 
-## ✨ Key Features
+## ✨ Features
 
-- 🚀 **Auto-Run Engine**: Automatically detects connected ADB devices and initiates reverse tethering.
-- 📊 **Real-time Traffic Monitor**: Visualize your data flow with interactive charts (powered by Recharts).
-- 🌓 **Adaptive UI**: Beautifully designed interface with native Light and Dark mode support.
-- 🌐 **Flexible DNS**: Choose from popular presets (Google, Cloudflare) or set your own custom DNS.
-- 📝 **Live Logging**: Real-time terminal output parser for easier debugging and status tracking.
-- 🌍 **Multi-language Support**: Fully localized in English and Indonesian.
-- 🛠️ **Environment Bundle**: Comes with pre-bundled Gnirehtet Rust and ADB binaries for a "just work" experience.
+- **Auto-Run Engine**: Detects connected ADB devices and initiates reverse tethering automatically.
+- **Traffic Monitor**: Visualizes data throughput with real-time charts.
+- **Themed Interface**: Supports native Light and Dark modes.
+- **DNS Configuration**: Includes presets (Google, Cloudflare) and custom DNS options.
+- **Live Logs**: Real-time terminal output parser for debugging and status tracking.
+- **Localization**: Available in English and Indonesian.
+- **Bundled Binaries**: Includes Gnirehtet Rust and ADB binaries for immediate use.
 
 ---
 
-## 💻 Deep Dive: Technical Overview
+## 💻 Technical Overview
 
 The application establishes a per-device VPN tunnel on the Android side that routes network traffic through a TCP relay server running on the PC. It automates the lifecycle of this relay and the ADB (Android Debug Bridge) connection.
 
-### 1. Multi-Device Engine
-Wirebound uses the `autorun` execution mode which:
-- Monitors the ADB bus for new device connections.
-- Automatically installs the `gnirehtet.apk` if missing.
-- Initiates the VPN service on each device simultaneously.
+### 1. Execution Mode
+Wirebound uses the `autorun` mode:
+- Monitors ADB bus for new connections.
+- Deploys `gnirehtet.apk` to the device.
+- Initiates the VPN service on multiple devices simultaneously.
 
 ### 2. Architecture
-Built with **Electron + Vite**, the application uses a strictly decoupled structure:
-- **Main Process (Node.js)**: Manages `gnirehtet.exe` and `adb.exe` lifecycle and process pipes.
-- **Renderer Process (React)**: An isolated UI layer built with Tailwind CSS v4 for modern styling.
-- **Preload Layer**: A secure Context Bridge for IPC communication between UI and OS.
+Built with **Electron + Vite**:
+- **Main Process (Node.js)**: Manages `gnirehtet.exe` and `adb.exe` processes.
+- **Renderer Process (React)**: UI layer styled with Tailwind CSS.
+- **Preload Layer**: Context Bridge for secure IPC communication.
 
 ---
 
-## 📖 Usage Tutorial
+## 📖 Usage
 
-### Step 1: Prepare the Android Device
-1. Open **Settings** > **About Phone**.
-2. Tap **Build Number** 7 times until "Developer mode" is enabled.
-3. Enable **USB Debugging** in **Developer Options**.
+### Step 1: Device Preparation
+1. Enable **Developer Options** on the Android device.
+2. Enable **USB Debugging**.
 
 ### Step 2: Connection
-1. Connect your phone via USB.
-2. Allow USB Debugging prompt on the device (check "Always allow").
-3. Ensure USB mode is set to "File Transfer" or "MTP".
+1. Connect the device via USB.
+2. Authorize the ADB debugging prompt on the phone screen.
 
-### Step 3: Start Wirebound
-1. Open `Wirebound.exe`.
-2. Configure your preferred DNS in **Settings**.
-3. Hit **Start** in the Dashboard.
-4. Accept the VPN request on your phone.
+### Step 3: Execution
+1. Run `Wirebound.exe`.
+2. Configure DNS and Port in **Settings** if necessary.
+3. Click **Start** in the Dashboard.
+4. Accept the VPN request on the Android device.
 
 ---
 
 ## 🛠️ Development
-
-If you want to build or modify Wirebound:
 
 ```bash
 # Clone the repository
@@ -89,16 +85,8 @@ npm run build:win
 
 ---
 
-## 🐞 Troubleshooting
-
-- **No devices found**: Ensure you are using a high-quality data cable.
-- **VPN prompt not appearing**: Click **Stop** and then **Start** again.
-- **No internet access**: Check if your firewall is blocking the relay port (default: 31416).
-
----
-
 ## 📄 License & Credits
 
 - Wrapper for **Gnirehtet** by [Genymobile](https://github.com/Genymobile).
-- GUI built by **man612**.
+- GUI by **man612**.
 - Licensed under the **Apache License 2.0**.
