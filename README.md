@@ -47,6 +47,16 @@ Built with **Electron + Vite**:
 - **Renderer Process (React)**: UI layer styled with Tailwind CSS.
 - **Preload Layer**: Context Bridge for secure IPC communication.
 
+### 3. Project Structure
+```text
+bin/          # Bundled binaries (Gnirehtet & ADB)
+build/        # Installer assets & icons
+resources/    # Dashboard screenshots
+src/          # Application source code
+package.json  # Project manifest
+LICENSE       # Apache 2.0
+```
+
 ---
 
 ## 📖 Usage

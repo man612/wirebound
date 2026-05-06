@@ -23,12 +23,12 @@ export function getRuntimePaths(): RuntimePaths {
   const rootCandidates = [root, devRoot, appRoot]
 
   const gnirehtetDir = firstExisting(
-    rootCandidates.map((candidate) => join(candidate, 'gnirehtet-rust-win64')),
-    join(root, 'gnirehtet-rust-win64')
+    rootCandidates.map((candidate) => join(candidate, 'bin', 'gnirehtet-rust-win64')),
+    join(root, 'bin', 'gnirehtet-rust-win64')
   )
   const adbDir = firstExisting(
-    rootCandidates.map((candidate) => join(candidate, 'platform-tools')),
-    join(root, 'platform-tools')
+    rootCandidates.map((candidate) => join(candidate, 'bin', 'platform-tools')),
+    join(root, 'bin', 'platform-tools')
   )
   const icon = firstExisting(
     rootCandidates.flatMap((candidate) => [
