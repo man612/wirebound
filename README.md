@@ -27,35 +27,7 @@ Wirebound is a Windows desktop GUI for [Gnirehtet](https://github.com/Genymobile
 - **DNS Configuration**: Includes presets (Google, Cloudflare) and custom DNS options.
 - **Live Logs**: Real-time terminal output parser for debugging and status tracking.
 - **Localization**: Available in English and Indonesian.
-- **Bundled Binaries**: Includes Gnirehtet Rust and ADB binaries for immediate use.
-
----
-
-## 💻 Technical Overview
-
-The application establishes a per-device VPN tunnel on the Android side that routes network traffic through a TCP relay server running on the PC. It automates the lifecycle of this relay and the ADB (Android Debug Bridge) connection.
-
-### 1. Execution Mode
-Wirebound uses the `autorun` mode:
-- Monitors ADB bus for new connections.
-- Deploys `gnirehtet.apk` to the device.
-- Initiates the VPN service on multiple devices simultaneously.
-
-### 2. Architecture
-Built with **Electron + Vite**:
-- **Main Process (Node.js)**: Manages `gnirehtet.exe` and `adb.exe` processes.
-- **Renderer Process (React)**: UI layer styled with Tailwind CSS.
-- **Preload Layer**: Context Bridge for secure IPC communication.
-
-### 3. Project Structure
-```text
-bin/          # Bundled binaries (Gnirehtet & ADB)
-build/        # Installer assets & icons
-resources/    # Dashboard screenshots
-src/          # Application source code
-package.json  # Project manifest
-LICENSE       # Apache 2.0
-```
+- **Bundled Binaries**: Includes Gnirehtet Rust and ADB binaries for immediate use in packaged builds.
 
 ---
 
@@ -66,6 +38,33 @@ LICENSE       # Apache 2.0
 It uses Gnirehtet as the underlying reverse tethering engine and provides a graphical interface for device detection, connection management, DNS/Port configuration, and traffic monitoring. 
 
 **Wirebound is not an official Gnirehtet project and is not affiliated with Genymobile.**
+
+> **Note**: Gnirehtet runtime binaries (`.exe` and `.apk`) are bundled in the official release builds for convenience. If building from source, ensure the runtime files are placed in the `bin/` directory.
+
+---
+
+## 💻 Technical Overview
+
+The application establishes a per-device VPN tunnel on the Android side that routes network traffic through a TCP relay server running on the PC. It automates the lifecycle of this relay and the ADB connection.
+
+### 1. Execution Mode
+Wirebound uses the `autorun` mode to monitor the ADB bus for new connections and deploy the required services to multiple devices simultaneously.
+
+### 2. Architecture
+Built with **Electron + Vite**, utilizing a decoupled structure:
+- **Main Process**: Manages binary lifecycle and process pipes.
+- **Renderer Process**: Isolated React UI layer with Tailwind CSS.
+- **Preload Layer**: Secure Context Bridge for IPC.
+
+### 3. Project Structure
+```text
+bin/          # Bundled binaries (Gnirehtet & ADB)
+build/        # Installer assets & icons
+resources/    # Dashboard screenshots
+src/          # Application source code
+package.json  # Project manifest
+LICENSE       # Apache 2.0
+```
 
 ---
 
