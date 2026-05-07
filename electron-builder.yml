@@ -4,17 +4,16 @@ directories:
   buildResources: build
   output: dist
 extraResources:
-  - from: gnirehtet-rust-win64
-    to: gnirehtet-rust-win64
-  - from: platform-tools
-    to: platform-tools
+  - from: bin/gnirehtet-rust-win64
+    to: bin/gnirehtet-rust-win64
+  - from: bin/platform-tools
+    to: bin/platform-tools
   - from: src/renderer/src/assets/icon.png
     to: icon.png
 files:
   - '!**/.vscode/*'
   - '!dist/**'
-  - '!gnirehtet-rust-win64/**'
-  - '!platform-tools/**'
+  - '!bin/**'
   - '!src/*'
   - '!*.exe'
   - '!*.blockmap'

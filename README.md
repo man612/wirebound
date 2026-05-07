@@ -59,6 +59,16 @@ LICENSE       # Apache 2.0
 
 ---
 
+## 💻 Relationship with Gnirehtet
+
+**Wirebound** is an independent Windows desktop GUI and automation layer built around [Gnirehtet](https://github.com/Genymobile/gnirehtet). 
+
+It uses Gnirehtet as the underlying reverse tethering engine and provides a graphical interface for device detection, connection management, DNS/Port configuration, and traffic monitoring. 
+
+**Wirebound is not an official Gnirehtet project and is not affiliated with Genymobile.**
+
+---
+
 ## 📖 Usage
 
 ### Step 1: Device Preparation
@@ -97,6 +107,7 @@ npm run build:win
 
 ## 📄 License & Credits
 
-- Wrapper for **Gnirehtet** by [Genymobile](https://github.com/Genymobile).
-- GUI by **man612**.
-- Licensed under the **Apache License 2.0**.
+- **Wirebound GUI & Integration**: Built by [man612](https://github.com/man612).
+- **Engine**: Powered by [Gnirehtet](https://github.com/Genymobile/gnirehtet) by Genymobile.
+- **License**: Both projects are licensed under the **Apache License 2.0**.
+- **Third-Party**: Detailed notices are available in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
