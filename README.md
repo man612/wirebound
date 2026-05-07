@@ -66,6 +66,17 @@ package.json  # Project manifest
 LICENSE       # Apache 2.0
 ```
 
+### 4. Runtime Binaries
+Wirebound release builds include the required Gnirehtet and ADB runtime files. 
+
+If you build from source, you must prepare the following files manually in the `bin/` directory:
+- `bin/gnirehtet-rust-win64/gnirehtet.exe`
+- `bin/gnirehtet-rust-win64/gnirehtet.apk`
+- `bin/gnirehtet-rust-win64/gnirehtet-run.cmd`
+- `bin/platform-tools/adb.exe`
+
+You can obtain the original Gnirehtet binaries from the [official Genymobile release page](https://github.com/Genymobile/gnirehtet/releases).
+
 ---
 
 ## 📖 Usage
