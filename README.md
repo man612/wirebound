@@ -14,6 +14,18 @@ Reverse tethering is useful, but most existing workflows are terminal-based and 
 
 The goal is not to replace Gnirehtet, but to make its workflow easier to start, monitor, and troubleshoot on Windows.
 
+
+## Project status
+
+Wirebound is currently an early stable release. The core workflow is available, but the project still needs more testing across Windows versions, Android devices, USB drivers, and ADB edge cases.
+
+Current maintainer focus:
+
+- Better troubleshooting documentation
+- Clearer first-run onboarding
+- Smaller and lighter Windows packaging
+- Portable build investigation
+- Improved connection diagnostics
 ---
 
 ## 📸 Preview
