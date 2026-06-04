@@ -8,6 +8,12 @@
 
 Wirebound is a Windows desktop GUI for [Gnirehtet](https://github.com/Genymobile/gnirehtet), providing a management interface for reverse tethering. It allows Android devices to use a computer's internet connection via USB without requiring root access.
 
+## Why I built this
+
+Reverse tethering is useful, but most existing workflows are terminal-based and confusing for non-technical users. I built Wirebound to provide a simple Windows interface for Android USB internet sharing, especially for practical situations like office work, device testing, repair desks, field support, or low-connectivity environments.
+
+The goal is not to replace Gnirehtet, but to make its workflow easier to start, monitor, and troubleshoot on Windows.
+
 ---
 
 ## 📸 Preview
