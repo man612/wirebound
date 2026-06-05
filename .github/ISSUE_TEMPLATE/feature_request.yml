@@ -1,0 +1,57 @@
+name: Feature request
+description: Suggest an improvement or new capability.
+title: '[Feature]: '
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share the user problem first. A small practical feature is usually better than a broad idea.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+      placeholder: Users cannot tell whether ADB is unauthorized or the VPN prompt was missed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Wirebound do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any simpler or different approaches?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - ADB/device detection
+        - Gnirehtet engine
+        - Onboarding
+        - Settings
+        - Logs/diagnostics
+        - Packaging/release
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I have searched existing issues for a similar request.
+          required: true

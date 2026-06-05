@@ -1,0 +1,35 @@
+name: Release task
+description: Track packaging, verification, and release work.
+title: '[Release]: '
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Target version
+      placeholder: v1.0.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Release scope
+      description: What changes should be included?
+      placeholder: Bug fixes, CI updates, installer smoke test, README updates.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Release checklist
+      options:
+        - label: Local lint passes.
+        - label: Local typecheck passes.
+        - label: Local build passes.
+        - label: Windows installer build passes.
+        - label: App launches on Windows.
+        - label: ADB device detection smoke test completed.
+        - label: Start/stop tethering smoke test completed.
+        - label: Release notes drafted.
+        - label: Third-party notices reviewed if bundled binaries changed.
