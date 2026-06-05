@@ -1,6 +1,6 @@
 {
   "name": "wirebound",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Desktop GUI for Gnirehtet reverse tethering",
   "main": "./out/main/index.js",
   "author": "man612",
@@ -44,7 +44,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "prettier": "^3.7.4",
     "react": "^19.2.1",
-    "react-dom": "^19.2.1",
+    "react-dom": "^19.2.3",
     "tailwindcss": "^4.2.4",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
