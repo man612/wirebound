@@ -2,7 +2,7 @@
 
 ![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows)
 ![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)
-![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-green?style=for-the-badge)
+![Version: 1.0.1](https://img.shields.io/badge/Version-1.0.1-green?style=for-the-badge)
 ![Electron](https://img.shields.io/badge/Electron-v39.x-47848F?style=for-the-badge&logo=electron)
 ![React](https://img.shields.io/badge/React-v19.x-61DAFB?style=for-the-badge&logo=react)
 
@@ -26,6 +26,7 @@ Current maintainer focus:
 - Smaller and lighter Windows packaging
 - Portable build investigation
 - Improved connection diagnostics
+
 ---
 
 ## 📸 Preview
