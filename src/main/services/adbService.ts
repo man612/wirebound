@@ -52,7 +52,9 @@ export class AdbService {
       const stdout = await this.execAdb(['devices'])
       const devices = stdout
         .split(/\r?\n/)
-        .map((line) => line.trim().match(/^([^\s]+)\s+(device|offline|unauthorized)$/))
+        .map((line) =>
+          line.trim().match(/^([^\s]+)\s+(device|offline|unauthorized|no permissions)$/)
+        )
         .filter((match): match is RegExpMatchArray => match !== null)
         .map((match) => ({
           id: match[1],
