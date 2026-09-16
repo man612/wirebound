@@ -2,7 +2,6 @@ export type Language = 'en' | 'id'
 
 export const translations = {
   en: {
-    // Onboarding
     welcome: 'Welcome to Wirebound',
     onboardingDesc: "Share your computer's internet connection with Android devices via USB.",
     chooseLanguage: 'Choose Language',
@@ -12,16 +11,17 @@ export const translations = {
     next: 'Next',
     getStarted: 'Get Started',
 
-    // Dashboard
     testDesktopSpeed: 'Test Desktop Speed',
     testDeviceSpeed: 'Speed Test',
     noDevice: 'No device detected',
-    connectDevice: 'Connect an Android device via USB',
+    adbUnavailable: 'ADB is unavailable',
+    devicesLabel: 'Android Devices',
     setupReadyTitle: 'Device ready',
     setupReadyDesc: 'Start the connection, then accept the VPN prompt on the Android device.',
-    setupConnectedTitle: 'Connection active',
-    setupConnectedDesc: 'The relay is running. Use the speed test to verify device connectivity.',
-    setupConnectingTitle: 'Waiting for device VPN',
+    setupConnectedTitle: 'Relay and Android VPN are active',
+    setupConnectedDesc:
+      'Use the speed test to verify that internet access is actually working on the device.',
+    setupConnectingTitle: 'Waiting for Android VPN client',
     setupConnectingDesc: 'Keep the phone unlocked and accept the Gnirehtet VPN permission prompt.',
     setupNoDeviceTitle: 'No Android device detected',
     setupNoDeviceDesc:
@@ -35,6 +35,9 @@ export const translations = {
     setupNoPermissionsTitle: 'ADB cannot access the device',
     setupNoPermissionsDesc:
       'Check the USB driver, cable, and system permissions, then reconnect the device.',
+    setupAdbErrorTitle: 'ADB is not available',
+    setupAdbErrorDesc:
+      'Wirebound cannot query ADB. Check the bundled runtime or restart the application.',
     adbStatusReady: 'Ready',
     adbStatusUnauthorized: 'Unauthorized',
     adbStatusOffline: 'Offline',
@@ -44,38 +47,31 @@ export const translations = {
     settings: 'Settings',
     terminal: 'Terminal Logs',
 
-    // Status
     disconnected: 'Disconnected',
     connecting: 'Connecting...',
     connected: 'Connected',
     error: 'Connection Error',
 
-    // Actions
     start: 'Start Connection',
     stop: 'Stop Connection',
 
-    // Traffic
-    trafficMonitor: 'Traffic Monitor',
-    download: 'Download',
-    upload: 'Upload',
-    gathering: 'Gathering data...',
-    noActiveConnection: 'No active connection',
-    // Settings
     networkConfig: 'Network Configuration',
     environment: 'Environment',
     dnsProvider: 'DNS Provider',
-    dnsDesc: 'Primary resolution server for tethered traffic',
-    customIp: 'Custom IP Address',
+    dnsDesc: 'DNS server used by the Gnirehtet relay',
+    customIp: 'Custom IPv4 Address',
+    customDnsInvalid: 'Enter a valid IPv4 address.',
     autoStartLabel: 'Auto-Start Tethering',
-    autoStartDesc: 'Launch engine when application starts',
+    autoStartDesc: 'Start the tethering engine when Wirebound opens',
     themeLabel: 'Color Theme',
     themeDesc: 'Interface appearance',
     langLabel: 'Display Language',
     relayPort: 'Relay Port',
-    portDesc: 'The local port used for the relay server',
+    portDesc: 'TCP port used by the local relay',
+    portInvalid: 'Use a port from 1 to 65535.',
 
-    // UI Elements
     terminalLabel: 'Terminal Logs',
+    noLogsYet: 'No engine output yet',
     clear: 'Clear',
     deviceStatus: 'Status',
     deviceId: 'ID',
@@ -83,14 +79,12 @@ export const translations = {
     power: 'Power',
     actions: 'Actions',
 
-    // About
     about: 'About Wirebound',
     developer: 'Developer',
     githubRepo: 'GitHub',
-    creditsDesc: 'A desktop GUI for Gnirehtet reverse tethering.'
+    creditsDesc: 'A Windows desktop GUI for Gnirehtet reverse tethering.'
   },
   id: {
-    // Onboarding
     welcome: 'Selamat Datang di Wirebound',
     onboardingDesc: 'Bagikan koneksi internet komputer ke perangkat Android melalui USB.',
     chooseLanguage: 'Pilih Bahasa',
@@ -100,21 +94,21 @@ export const translations = {
     next: 'Selanjutnya',
     getStarted: 'Mulai Sekarang',
 
-    // Dashboard
-    testDesktopSpeed: 'Test Desktop Speed',
-    testDeviceSpeed: 'Speed Test',
+    testDesktopSpeed: 'Tes Kecepatan PC',
+    testDeviceSpeed: 'Tes Kecepatan',
     noDevice: 'Tidak ada perangkat terdeteksi',
-    connectDevice: 'Hubungkan perangkat Android via USB',
+    adbUnavailable: 'ADB tidak tersedia',
+    devicesLabel: 'Perangkat Android',
     setupReadyTitle: 'Perangkat siap',
     setupReadyDesc: 'Mulai koneksi, lalu terima prompt VPN Gnirehtet di perangkat Android.',
-    setupConnectedTitle: 'Koneksi aktif',
+    setupConnectedTitle: 'Relay dan VPN Android aktif',
     setupConnectedDesc:
-      'Relay sedang berjalan. Gunakan speed test untuk memeriksa koneksi perangkat.',
-    setupConnectingTitle: 'Menunggu VPN perangkat',
+      'Gunakan tes kecepatan untuk memastikan akses internet benar-benar bekerja di perangkat.',
+    setupConnectingTitle: 'Menunggu klien VPN Android',
     setupConnectingDesc: 'Biarkan HP terbuka dan terima prompt izin VPN Gnirehtet.',
     setupNoDeviceTitle: 'Perangkat Android tidak terdeteksi',
     setupNoDeviceDesc:
-      'Hubungkan perangkat via USB, aktifkan USB debugging, lalu authorize komputer ini.',
+      'Hubungkan perangkat via USB, aktifkan USB debugging, lalu izinkan komputer ini.',
     setupUnauthorizedTitle: 'USB debugging belum diizinkan',
     setupUnauthorizedDesc: 'Buka kunci HP dan setujui prompt USB debugging untuk komputer ini.',
     setupOfflineTitle: 'Perangkat ADB offline',
@@ -123,6 +117,9 @@ export const translations = {
     setupNoPermissionsTitle: 'ADB tidak bisa mengakses perangkat',
     setupNoPermissionsDesc:
       'Periksa driver USB, kabel, dan izin sistem, lalu sambungkan ulang perangkat.',
+    setupAdbErrorTitle: 'ADB tidak tersedia',
+    setupAdbErrorDesc:
+      'Wirebound tidak bisa menjalankan ADB. Periksa runtime bawaan atau buka ulang aplikasi.',
     adbStatusReady: 'Siap',
     adbStatusUnauthorized: 'Belum izin',
     adbStatusOffline: 'Offline',
@@ -132,39 +129,31 @@ export const translations = {
     settings: 'Pengaturan',
     terminal: 'Log Terminal',
 
-    // Status
     disconnected: 'Terputus',
     connecting: 'Menghubungkan...',
     connected: 'Terhubung',
     error: 'Koneksi Error',
 
-    // Actions
     start: 'Mulai Koneksi',
     stop: 'Hentikan Koneksi',
 
-    // Traffic
-    trafficMonitor: 'Monitor Lalu Lintas',
-    download: 'Unduh',
-    upload: 'Unggah',
-    gathering: 'Mengumpulkan data...',
-    noActiveConnection: 'Tidak ada koneksi aktif',
-
-    // Settings
     networkConfig: 'Konfigurasi Jaringan',
     environment: 'Lingkungan',
     dnsProvider: 'Penyedia DNS',
-    dnsDesc: 'Server utama untuk resolusi lalu lintas data',
-    customIp: 'Alamat IP Kustom',
+    dnsDesc: 'Server DNS yang digunakan relay Gnirehtet',
+    customIp: 'Alamat IPv4 Kustom',
+    customDnsInvalid: 'Masukkan alamat IPv4 yang valid.',
     autoStartLabel: 'Auto-Start Tethering',
-    autoStartDesc: 'Jalankan mesin saat aplikasi dibuka',
+    autoStartDesc: 'Jalankan mesin tethering saat Wirebound dibuka',
     themeLabel: 'Tema Warna',
     themeDesc: 'Tampilan antarmuka',
     langLabel: 'Bahasa Tampilan',
     relayPort: 'Port Relay',
-    portDesc: 'Port lokal yang digunakan untuk server relay',
+    portDesc: 'Port TCP yang digunakan relay lokal',
+    portInvalid: 'Gunakan port dari 1 sampai 65535.',
 
-    // UI Elements
     terminalLabel: 'Log Terminal',
+    noLogsYet: 'Belum ada output dari engine',
     clear: 'Bersihkan',
     deviceStatus: 'Status',
     deviceId: 'ID',
@@ -172,11 +161,10 @@ export const translations = {
     power: 'Daya',
     actions: 'Aksi',
 
-    // About
     about: 'Tentang Wirebound',
     developer: 'Pengembang',
     githubRepo: 'GitHub',
-    creditsDesc: 'GUI desktop untuk reverse tethering Gnirehtet.'
+    creditsDesc: 'GUI desktop Windows untuk reverse tethering Gnirehtet.'
   }
 }
 

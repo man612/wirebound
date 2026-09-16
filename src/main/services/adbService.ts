@@ -1,10 +1,21 @@
 import { execFile, type ExecFileException } from 'child_process'
 import { existsSync } from 'fs'
 import type { RuntimePaths } from '../appPaths'
-import type { ActionResult, AdbDevice } from '../../shared/types'
+import type { ActionResult, AdbDevice, AdbSnapshot } from '../../shared/types'
 
 const GNIREHTET_PACKAGE = 'com.genymobile.gnirehtet'
 const SPEED_TEST_URL = 'https://fast.com'
+const DEVICE_DETAILS_TTL_MS = 30_000
+export const WIREBOUND_ADB_SERVER_PORT = '5038'
+
+interface DeviceDetails {
+  name: string
+  battery?: string
+}
+
+interface CachedDeviceDetails extends DeviceDetails {
+  expiresAt: number
+}
 
 function capitalize(value: string): string {
   return value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : ''
@@ -15,19 +26,44 @@ function errorMessage(error: ExecFileException, stderr: string | Buffer): string
   return stderrText || error.message
 }
 
+function readableError(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
+}
+
+export function parseAdbDevices(stdout: string): AdbDevice[] {
+  return stdout
+    .split(/\r?\n/)
+    .map((line) =>
+      line.trim().match(/^([^\s]+)\s+(device|offline|unauthorized|no permissions)(?:\s+.*)?$/)
+    )
+    .filter((match): match is RegExpMatchArray => match !== null)
+    .map((match) => ({
+      id: match[1],
+      name: 'Android Device',
+      status: match[2] as AdbDevice['status']
+    }))
+}
+
+export function parseBatteryLevel(output: string): string | undefined {
+  return output.match(/level:\s*(\d+)/i)?.[1]
+}
+
 export class AdbService {
+  private readonly detailsCache = new Map<string, CachedDeviceDetails>()
+
   public constructor(private readonly paths: RuntimePaths) {}
 
   private adbEnv(): NodeJS.ProcessEnv {
     return {
       ...process.env,
-      PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`
+      PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`,
+      ANDROID_ADB_SERVER_PORT: WIREBOUND_ADB_SERVER_PORT
     }
   }
 
-  private execAdb(args: string[], timeout = 5000): Promise<string> {
+  private runAdb(args: string[], timeout = 5000): Promise<string> {
     if (!existsSync(this.paths.adbExe)) {
-      return Promise.reject(new Error(`ADB not found: ${this.paths.adbExe}`))
+      return Promise.reject(new Error(`ADB runtime not found: ${this.paths.adbExe}`))
     }
 
     return new Promise((resolve, reject) => {
@@ -47,34 +83,45 @@ export class AdbService {
     })
   }
 
-  public async getDevices(): Promise<AdbDevice[]> {
-    try {
-      const stdout = await this.execAdb(['devices'])
-      const devices = stdout
-        .split(/\r?\n/)
-        .map((line) =>
-          line.trim().match(/^([^\s]+)\s+(device|offline|unauthorized|no permissions)$/)
-        )
-        .filter((match): match is RegExpMatchArray => match !== null)
-        .map((match) => ({
-          id: match[1],
-          name: 'Android Device',
-          status: match[2] as AdbDevice['status']
-        }))
+  private execAdb(args: string[], timeout = 5000): Promise<string> {
+    return this.runAdb(args, timeout)
+  }
 
-      return Promise.all(
+  public async releaseOwnedServer(): Promise<void> {
+    try {
+      await this.runAdb(['kill-server'], 3000)
+    } catch (error) {
+      console.warn('Wirebound: Failed to stop dedicated ADB server.', error)
+    }
+  }
+
+  public async getSnapshot(): Promise<AdbSnapshot> {
+    try {
+      const devices = parseAdbDevices(await this.execAdb(['devices']))
+      const connectedIds = new Set(devices.map((device) => device.id))
+
+      for (const cachedId of this.detailsCache.keys()) {
+        if (!connectedIds.has(cachedId)) {
+          this.detailsCache.delete(cachedId)
+        }
+      }
+
+      const detailedDevices = await Promise.all(
         devices.map(async (device) => {
           if (device.status !== 'device') {
             return device
           }
 
-          const details = await this.getDeviceDetails(device.id)
-          return { ...device, ...details }
+          return { ...device, ...(await this.getDeviceDetails(device.id)) }
         })
       )
+
+      return { devices: detailedDevices }
     } catch (error) {
-      console.warn('Wirebound: Failed to list ADB devices.', error)
-      return []
+      return {
+        devices: [],
+        error: readableError(error, 'Unable to query ADB devices.')
+      }
     }
   }
 
@@ -102,21 +149,34 @@ export class AdbService {
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to open speed test on device.'
+        error: readableError(error, 'Failed to open speed test on device.')
       }
     }
   }
 
   public async stopAllClients(): Promise<number> {
-    const devices = await this.getDevices()
-    const activeDevices = devices.filter((device) => device.status === 'device')
+    const snapshot = await this.getSnapshot()
 
+    if (snapshot.error) {
+      throw new Error(snapshot.error)
+    }
+
+    const activeDevices = snapshot.devices.filter((device) => device.status === 'device')
     await Promise.all(activeDevices.map((device) => this.stopClient(device.id)))
     return activeDevices.length
   }
 
   public async getActiveGnirehtetClients(devices?: AdbDevice[]): Promise<AdbDevice[]> {
-    const deviceList = devices ?? (await this.getDevices())
+    let deviceList = devices
+
+    if (!deviceList) {
+      const snapshot = await this.getSnapshot()
+      if (snapshot.error) {
+        throw new Error(snapshot.error)
+      }
+      deviceList = snapshot.devices
+    }
+
     const activeDevices = deviceList.filter((device) => device.status === 'device')
     const states = await Promise.all(
       activeDevices.map(async (device) => ({
@@ -128,7 +188,13 @@ export class AdbService {
     return states.filter((state) => state.active).map((state) => state.device)
   }
 
-  private async getDeviceDetails(deviceId: string): Promise<Pick<AdbDevice, 'name' | 'battery'>> {
+  private async getDeviceDetails(deviceId: string): Promise<DeviceDetails> {
+    const cached = this.detailsCache.get(deviceId)
+
+    if (cached && cached.expiresAt > Date.now()) {
+      return { name: cached.name, battery: cached.battery }
+    }
+
     try {
       const [brandOutput, modelOutput, batteryOutput] = await Promise.all([
         this.execAdb(['-s', deviceId, 'shell', 'getprop', 'ro.product.brand'], 3000),
@@ -138,12 +204,17 @@ export class AdbService {
 
       const brand = capitalize(brandOutput.trim())
       const model = modelOutput.trim()
-      const batteryMatch = batteryOutput.match(/level:\s*(\d+)/i)
-
-      return {
+      const details: DeviceDetails = {
         name: `${brand} ${model}`.trim() || 'Android Device',
-        battery: batteryMatch?.[1]
+        battery: parseBatteryLevel(batteryOutput)
       }
+
+      this.detailsCache.set(deviceId, {
+        ...details,
+        expiresAt: Date.now() + DEVICE_DETAILS_TTL_MS
+      })
+
+      return details
     } catch (error) {
       console.warn(`Wirebound: Failed to read details for ${deviceId}.`, error)
       return { name: 'Android Device' }

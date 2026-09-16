@@ -1,25 +1,33 @@
 # Security Policy
 
-Wirebound is a desktop utility that manages Android reverse tethering through Gnirehtet and ADB.
+Wirebound is a Windows desktop utility that manages Android reverse tethering through Gnirehtet and ADB. It can launch bundled executables and issue ADB commands to authorized Android devices, so reports involving those trust boundaries are taken seriously.
 
-## Reporting security issues
+## Reporting a vulnerability
 
-If you find a security issue, please open a GitHub issue with a clear description, or contact the maintainer through the GitHub profile.
+Please prefer GitHub's **private vulnerability reporting** for this repository when that option is available. If it is not available, contact the maintainer through the GitHub profile before publishing exploit details.
 
-Please do not include sensitive personal data, private network credentials, or device-specific secrets in public issues.
+Do not post credentials, private network data, device identifiers, or working exploit details in a public issue.
 
-## Scope
+For non-sensitive bugs that do not create a security risk, a normal GitHub issue is appropriate.
 
-Security-related reports may include:
+## In scope
 
-- Unsafe handling of bundled binaries
-- Unexpected command execution
-- Insecure logging of sensitive information
-- ADB-related behavior that could confuse users
-- Misleading permission prompts or unclear setup instructions
+Examples include:
 
-## Notes for users
+- IPC or renderer behavior that can trigger unintended privileged actions
+- unexpected command or executable execution
+- unsafe handling or substitution of bundled runtime files
+- navigation or external-link behavior that escapes the intended allowlist
+- sensitive information exposed in logs or settings
+- ADB behavior that can affect devices beyond the user's explicit action
+- misleading security or permission state shown by the application
 
-Wirebound requires Android USB Debugging and a VPN permission prompt on the Android device because it relies on Gnirehtet's reverse tethering workflow.
+## Runtime integrity
 
-Only use this tool on devices you own or are authorized to manage.
+Wirebound release builds pin Gnirehtet and Android SDK Platform Tools versions. The runtime preparation script verifies SHA-256 before extraction; a checksum mismatch fails the build instead of silently accepting changed binaries.
+
+## User responsibility
+
+Wirebound requires Android USB debugging authorization and a VPN permission prompt because that is how Gnirehtet works. Only connect devices you own or are authorized to manage, and revoke USB-debugging authorization when a computer should no longer control a device.
+
+Security fixes are applied to the actively developed branch. There is currently no promise of long-term security maintenance for older Wirebound releases.

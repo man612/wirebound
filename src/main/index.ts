@@ -9,12 +9,16 @@ import { AdbService } from './services/adbService'
 import { GnirehtetService } from './services/gnirehtetService'
 import type { AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
 
+const DEVICE_POLL_INTERVAL_MS = 4000
+
 let mainWindow: BrowserWindow | null = null
 let devicePoller: NodeJS.Timeout | null = null
 let runtimePaths: RuntimePaths | null = null
 let adbService: AdbService | null = null
 let gnirehtetService: GnirehtetService | null = null
 let handlersRegistered = false
+let shutdownStarted = false
+let shutdownComplete = false
 
 function sendToRenderer(channel: string, payload: unknown): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -31,22 +35,28 @@ function sendStatus(status: ConnectionStatus): void {
   sendToRenderer('gnirehtet:status-change', status)
 }
 
-function startDevicePolling(adbService: AdbService): void {
-  const pollDevices = async (): Promise<void> => {
-    const devices = await adbService.getDevices()
-    sendToRenderer('adb:devices-change', devices)
-    await gnirehtetService?.syncStatusWithDeviceState(devices)
+function startDevicePolling(adb: AdbService, engine: GnirehtetService): void {
+  const poll = async (): Promise<void> => {
+    const snapshot = await adb.getSnapshot()
+    sendToRenderer('adb:devices-change', snapshot)
+
+    if (snapshot.error) {
+      engine.reportAdbUnavailable(snapshot.error)
+    } else {
+      await engine.syncStatusWithDeviceState(snapshot.devices)
+    }
+
+    if (!shutdownStarted) {
+      devicePoller = setTimeout(() => void poll(), DEVICE_POLL_INTERVAL_MS)
+    }
   }
 
-  void pollDevices()
-  devicePoller = setInterval(() => {
-    void pollDevices()
-  }, 3000)
+  void poll()
 }
 
 function stopDevicePolling(): void {
   if (devicePoller) {
-    clearInterval(devicePoller)
+    clearTimeout(devicePoller)
     devicePoller = null
   }
 }
@@ -90,7 +100,7 @@ function bootstrap(): void {
   }
 
   if (!devicePoller) {
-    startDevicePolling(adb)
+    startDevicePolling(adb, engine)
   }
 
   if (settings.autoStart && engine.getStatus() === 'disconnected') {
@@ -98,31 +108,66 @@ function bootstrap(): void {
   }
 }
 
-app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.yasman.wirebound')
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
+async function shutdown(): Promise<void> {
+  if (shutdownStarted) {
+    return
+  }
 
-  bootstrap()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      bootstrap()
-    }
-  })
-})
-
-app.on('before-quit', () => {
-  stopDevicePolling()
-  gnirehtetService?.dispose()
-})
-
-app.on('window-all-closed', () => {
+  shutdownStarted = true
   stopDevicePolling()
 
-  if (process.platform !== 'darwin') {
-    gnirehtetService?.dispose()
+  try {
+    await gnirehtetService?.stop()
+  } catch (error) {
+    console.warn('Wirebound: Engine shutdown cleanup failed.', error)
+  }
+
+  try {
+    await adbService?.releaseOwnedServer()
+  } catch (error) {
+    console.warn('Wirebound: ADB shutdown cleanup failed.', error)
+  } finally {
+    shutdownComplete = true
     app.quit()
   }
-})
+}
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+
+if (!hasSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  })
+
+  app.whenReady().then(() => {
+    electronApp.setAppUserModelId('com.wirebound.app')
+
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window)
+    })
+
+    bootstrap()
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0 && !shutdownStarted) {
+        bootstrap()
+      }
+    })
+  })
+
+  app.on('before-quit', (event) => {
+    if (shutdownComplete) return
+
+    event.preventDefault()
+    void shutdown()
+  })
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+}
