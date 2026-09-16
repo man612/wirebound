@@ -15,7 +15,7 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "build:unpack": "npm run runtime:prepare && npm run build && electron-builder --win --dir",
-    "build:win": "npm run runtime:prepare && npm run build && electron-builder --win",
+    "build:win": "npm run runtime:prepare && npm run build && electron-builder --win --publish never",
     "runtime:prepare": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-runtime.ps1",
     "predev": "npm run runtime:prepare",
     "test": "vitest run",
