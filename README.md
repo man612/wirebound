@@ -1,4 +1,4 @@
-﻿# Wirebound
+# Wirebound
 
 ![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows)
 ![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)
@@ -30,6 +30,7 @@ A `Connected` state means the desktop relay is running and a Gnirehtet client is
 - **DNS and relay settings** â€” Google, Cloudflare, custom IPv4 DNS, and configurable relay port.
 - **Live engine logs** â€” Gnirehtet output stays visible for troubleshooting.
 - **Device speed-test shortcut** â€” Opens Fast.com on an authorized Android device to verify real connectivity.
+- **Privacy-safe diagnostics** — Checks runtime files, ADB response, device authorization, Android/API version, and Gnirehtet client state; copied reports mask device serials.
 - **Light and dark themes** â€” With English and Indonesian localization.
 - **Graceful cleanup** â€” Stopping or closing Wirebound also attempts to stop Gnirehtet clients on attached devices.
 
@@ -50,9 +51,9 @@ Release builds currently pin:
 - **Gnirehtet:** 2.5.1, Rust Windows build
 - **Android SDK Platform Tools:** 37.0.1
 
-Runtime archives are downloaded by `scripts/prepare-runtime.ps1` and verified with SHA-256 before extraction. Generated runtime files are ignored by Git, so the repository does not rely on manually copied binaries.
+Runtime archives are downloaded by `scripts/prepare-runtime.ps1` and verified with SHA-256 before extraction. Generated runtime files are ignored by Git, so the repository does not rely on manually copied binaries. The packaged Platform Tools subset contains only ADB, its required Windows DLLs, and Google's notice/version metadata; unrelated tools such as Fastboot and sqlite3 are not shipped.
 
-Wirebound uses a dedicated local ADB server on port **5038**. The normal ADB server on port 5037 is left alone, so closing Wirebound does not intentionally stop an ADB server used by Android Studio or other tools.
+Wirebound uses the standard local ADB server on port **5037** so it can share the same USB transport with Android Studio and other ADB clients. To keep an ADB daemon from locking files inside the installed application, Wirebound runs its ADB client from a content-addressed cache under `%LOCALAPPDATA%\Wirebound\runtime` and does not kill the shared ADB server when Wirebound exits.
 
 ## Usage
 
@@ -65,7 +66,7 @@ Wirebound uses a dedicated local ADB server on port **5038**. The normal ADB ser
 7. Accept the Gnirehtet VPN permission prompt on Android.
 8. When Wirebound reports `Connected`, use **Speed Test** if you want to verify end-to-end internet access.
 
-If Wirebound reports `Unauthorized`, `Offline`, `No access`, or `ADB unavailable`, resolve that state before troubleshooting the relay itself.
+If Wirebound reports `Unauthorized`, `Offline`, `No access`, or `ADB unavailable`, resolve that state before troubleshooting the relay itself. The **Run Diagnostics** action provides a copyable support report without exposing the full device serial.
 
 ## Development
 
@@ -106,7 +107,7 @@ Wirebound is intentionally Windows-only today. The runtime paths, ADB distributi
 
 CI runs on Windows and verifies linting, TypeScript, unit tests, production build, and an unpacked package smoke test. Tags matching `v*` trigger the Windows release workflow.
 
-Release artifacts should be treated as the canonical user distribution. Source checkouts fetch pinned runtime dependencies during development/build rather than storing executable binaries in Git.
+Release artifacts should be treated as the canonical user distribution. Source checkouts fetch pinned runtime dependencies during development/build rather than storing executable binaries in Git. Release installers also receive a GitHub artifact attestation, which can be verified with `gh attestation verify <installer.exe> -R man612/wirebound`.
 
 ## License and credits
 

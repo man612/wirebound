@@ -1,6 +1,6 @@
 {
   "name": "wirebound",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Desktop GUI for Gnirehtet reverse tethering",
   "main": "./out/main/index.js",
   "author": "man612",

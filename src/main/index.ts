@@ -81,7 +81,7 @@ function ensureServices(): { paths: RuntimePaths; adb: AdbService; engine: Gnire
   return { paths: runtimePaths, adb: adbService, engine: gnirehtetService }
 }
 
-function bootstrap(): void {
+async function bootstrap(): Promise<void> {
   const { paths, adb, engine } = ensureServices()
   const settings = loadSettings()
 
@@ -97,6 +97,12 @@ function bootstrap(): void {
       getMainWindow: () => mainWindow
     })
     handlersRegistered = true
+  }
+
+  try {
+    await adb.ensureServerReady()
+  } catch (error) {
+    console.warn('Wirebound: ADB server was not ready during bootstrap.', error)
   }
 
   if (!devicePoller) {
@@ -122,14 +128,8 @@ async function shutdown(): Promise<void> {
     console.warn('Wirebound: Engine shutdown cleanup failed.', error)
   }
 
-  try {
-    await adbService?.releaseOwnedServer()
-  } catch (error) {
-    console.warn('Wirebound: ADB shutdown cleanup failed.', error)
-  } finally {
-    shutdownComplete = true
-    app.quit()
-  }
+  shutdownComplete = true
+  app.quit()
 }
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
@@ -151,11 +151,11 @@ if (!hasSingleInstanceLock) {
       optimizer.watchWindowShortcuts(window)
     })
 
-    bootstrap()
+    void bootstrap()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0 && !shutdownStarted) {
-        bootstrap()
+        void bootstrap()
       }
     })
   })

@@ -1,12 +1,21 @@
-import { execFile, type ExecFileException } from 'child_process'
+import { execFile, spawn, type ExecFileException } from 'child_process'
+import { createConnection } from 'net'
 import { existsSync } from 'fs'
 import type { RuntimePaths } from '../appPaths'
-import type { ActionResult, AdbDevice, AdbSnapshot } from '../../shared/types'
+import type {
+  ActionResult,
+  AdbDevice,
+  AdbSnapshot,
+  ConnectionStatus,
+  DiagnosticCheck,
+  DiagnosticDevice,
+  DiagnosticReport,
+  DiagnosticStatus
+} from '../../shared/types'
 
 const GNIREHTET_PACKAGE = 'com.genymobile.gnirehtet'
 const SPEED_TEST_URL = 'https://fast.com'
 const DEVICE_DETAILS_TTL_MS = 30_000
-export const WIREBOUND_ADB_SERVER_PORT = '5038'
 
 interface DeviceDetails {
   name: string
@@ -30,6 +39,25 @@ function readableError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
 }
 
+function isAdbPortOpen(timeout = 300): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: '127.0.0.1', port: 5037 })
+    let settled = false
+
+    const finish = (open: boolean): void => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      resolve(open)
+    }
+
+    socket.setTimeout(timeout)
+    socket.once('connect', () => finish(true))
+    socket.once('timeout', () => finish(false))
+    socket.once('error', () => finish(false))
+  })
+}
+
 export function parseAdbDevices(stdout: string): AdbDevice[] {
   return stdout
     .split(/\r?\n/)
@@ -48,16 +76,33 @@ export function parseBatteryLevel(output: string): string | undefined {
   return output.match(/level:\s*(\d+)/i)?.[1]
 }
 
+export function maskDeviceId(deviceId: string): string {
+  const value = deviceId.trim()
+  if (value.length <= 4) return '****'
+  return `${value.slice(0, 2)}...${value.slice(-2)}`
+}
+
+export function classifyDeviceAccess(devices: AdbDevice[]): DiagnosticStatus {
+  if (devices.some((device) => device.status === 'device')) return 'pass'
+  if (
+    devices.some((device) => device.status === 'unauthorized' || device.status === 'no permissions')
+  ) {
+    return 'error'
+  }
+  return 'warning'
+}
+
 export class AdbService {
   private readonly detailsCache = new Map<string, CachedDeviceDetails>()
+  private serverReadyPromise: Promise<void> | null = null
+  private serverReadyAt = 0
 
   public constructor(private readonly paths: RuntimePaths) {}
 
   private adbEnv(): NodeJS.ProcessEnv {
     return {
       ...process.env,
-      PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`,
-      ANDROID_ADB_SERVER_PORT: WIREBOUND_ADB_SERVER_PORT
+      PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`
     }
   }
 
@@ -87,16 +132,58 @@ export class AdbService {
     return this.runAdb(args, timeout)
   }
 
-  public async releaseOwnedServer(): Promise<void> {
+  public async ensureServerReady(): Promise<void> {
+    if (Date.now() - this.serverReadyAt < 5000) return
+    if (this.serverReadyPromise) return this.serverReadyPromise
+
+    this.serverReadyPromise = (async () => {
+      if (!existsSync(this.paths.adbExe)) {
+        throw new Error(`ADB runtime not found: ${this.paths.adbExe}`)
+      }
+
+      if (!(await isAdbPortOpen())) {
+        const server = spawn(this.paths.adbExe, ['nodaemon', 'server'], {
+          env: this.adbEnv(),
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        })
+        server.on('error', (error) => {
+          console.warn('Wirebound: Detached ADB server process failed.', error)
+        })
+        server.unref()
+      }
+
+      let lastError: unknown
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (!(await isAdbPortOpen())) {
+          await new Promise((resolve) => setTimeout(resolve, 250))
+          continue
+        }
+
+        try {
+          await this.execAdb(['devices'], 3000)
+          this.serverReadyAt = Date.now()
+          return
+        } catch (error) {
+          lastError = error
+          await new Promise((resolve) => setTimeout(resolve, 250))
+        }
+      }
+
+      throw lastError instanceof Error ? lastError : new Error('ADB server did not become ready.')
+    })()
+
     try {
-      await this.runAdb(['kill-server'], 3000)
-    } catch (error) {
-      console.warn('Wirebound: Failed to stop dedicated ADB server.', error)
+      await this.serverReadyPromise
+    } finally {
+      this.serverReadyPromise = null
     }
   }
 
   public async getSnapshot(): Promise<AdbSnapshot> {
     try {
+      await this.ensureServerReady()
       const devices = parseAdbDevices(await this.execAdb(['devices']))
       const connectedIds = new Set(devices.map((device) => device.id))
 
@@ -125,12 +212,115 @@ export class AdbService {
     }
   }
 
+  public async getDiagnostics(engineStatus: ConnectionStatus): Promise<DiagnosticReport> {
+    const checks: DiagnosticCheck[] = [
+      {
+        id: 'adbRuntime',
+        status: existsSync(this.paths.adbExe) ? 'pass' : 'error',
+        detail: existsSync(this.paths.adbExe)
+          ? 'ADB runtime is present.'
+          : 'ADB runtime is missing.'
+      },
+      {
+        id: 'gnirehtetRuntime',
+        status: existsSync(this.paths.gnirehtetExe) ? 'pass' : 'error',
+        detail: existsSync(this.paths.gnirehtetExe)
+          ? 'Gnirehtet runtime is present.'
+          : 'Gnirehtet runtime is missing.'
+      }
+    ]
+
+    if (!existsSync(this.paths.adbExe)) {
+      return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
+    }
+
+    try {
+      const versionOutput = await this.execAdb(['version'], 3000)
+      const versionLine = versionOutput
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.startsWith('Version '))
+      checks.push({
+        id: 'adbQuery',
+        status: 'pass',
+        detail: versionLine ?? 'ADB responded successfully.'
+      })
+    } catch (error) {
+      checks.push({
+        id: 'adbQuery',
+        status: 'error',
+        detail: readableError(error, 'ADB did not respond.')
+      })
+      return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
+    }
+
+    const snapshot = await this.getSnapshot()
+    if (snapshot.error) {
+      checks.push({ id: 'deviceAccess', status: 'error', detail: snapshot.error })
+      return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
+    }
+
+    checks.push({
+      id: 'deviceAccess',
+      status: classifyDeviceAccess(snapshot.devices),
+      detail:
+        snapshot.devices.length === 0
+          ? 'No Android device is visible to ADB.'
+          : `${snapshot.devices.filter((device) => device.status === 'device').length} authorized device(s), ${snapshot.devices.length} total.`
+    })
+
+    const devices = await Promise.all(
+      snapshot.devices.map((device) => this.getDiagnosticDevice(device))
+    )
+    const readyDevices = devices.filter((device) => device.status === 'device')
+
+    checks.push({
+      id: 'androidVersion',
+      status: readyDevices.length > 0 ? 'pass' : 'info',
+      detail:
+        readyDevices.length > 0
+          ? readyDevices
+              .map(
+                (device) =>
+                  `${device.name}: Android ${device.androidVersion ?? '?'} (API ${device.apiLevel ?? '?'})`
+              )
+              .join('; ')
+          : 'Android version can be read after a device is authorized.'
+    })
+
+    const activeClients = readyDevices.filter((device) => device.gnirehtetActive).length
+    checks.push({
+      id: 'gnirehtetClient',
+      status:
+        engineStatus === 'connected'
+          ? activeClients > 0
+            ? 'pass'
+            : 'error'
+          : engineStatus === 'connecting'
+            ? 'warning'
+            : engineStatus === 'error'
+              ? 'error'
+              : 'info',
+      detail:
+        engineStatus === 'connected'
+          ? `${activeClients} active Android Gnirehtet client(s).`
+          : engineStatus === 'connecting'
+            ? 'Desktop relay is running and waiting for the Android VPN client.'
+            : engineStatus === 'error'
+              ? 'The Wirebound engine is in an error state.'
+              : 'The Wirebound engine is stopped.'
+    })
+
+    return { generatedAt: new Date().toISOString(), engineStatus, checks, devices }
+  }
+
   public async openSpeedTest(deviceId: string): Promise<ActionResult> {
     if (!deviceId.trim()) {
       return { success: false, error: 'Device id is empty.' }
     }
 
     try {
+      await this.ensureServerReady()
       await this.execAdb(
         [
           '-s',
@@ -161,7 +351,7 @@ export class AdbService {
       throw new Error(snapshot.error)
     }
 
-    const activeDevices = snapshot.devices.filter((device) => device.status === 'device')
+    const activeDevices = await this.getActiveGnirehtetClients(snapshot.devices)
     await Promise.all(activeDevices.map((device) => this.stopClient(device.id)))
     return activeDevices.length
   }
@@ -186,6 +376,35 @@ export class AdbService {
     )
 
     return states.filter((state) => state.active).map((state) => state.device)
+  }
+
+  private async getDiagnosticDevice(device: AdbDevice): Promise<DiagnosticDevice> {
+    const diagnosticDevice: DiagnosticDevice = {
+      id: maskDeviceId(device.id),
+      name: device.name,
+      status: device.status
+    }
+
+    if (device.status !== 'device') return diagnosticDevice
+
+    const [androidVersion, apiLevel, packagePath, clientActive] = await Promise.allSettled([
+      this.execAdb(['-s', device.id, 'shell', 'getprop', 'ro.build.version.release'], 3000),
+      this.execAdb(['-s', device.id, 'shell', 'getprop', 'ro.build.version.sdk'], 3000),
+      this.execAdb(['-s', device.id, 'shell', 'pm', 'path', GNIREHTET_PACKAGE], 4000),
+      this.isGnirehtetClientActive(device.id)
+    ])
+
+    if (androidVersion.status === 'fulfilled') {
+      diagnosticDevice.androidVersion = androidVersion.value.trim() || undefined
+    }
+    if (apiLevel.status === 'fulfilled') {
+      diagnosticDevice.apiLevel = apiLevel.value.trim() || undefined
+    }
+    diagnosticDevice.gnirehtetInstalled =
+      packagePath.status === 'fulfilled' && packagePath.value.includes('package:')
+    diagnosticDevice.gnirehtetActive = clientActive.status === 'fulfilled' && clientActive.value
+
+    return diagnosticDevice
   }
 
   private async getDeviceDetails(deviceId: string): Promise<DeviceDetails> {

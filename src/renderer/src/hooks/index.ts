@@ -5,6 +5,7 @@ import type {
   AdbDevice,
   AppSettings,
   ConnectionStatus,
+  DiagnosticReport,
   LogEntry
 } from '../../../shared/types'
 
@@ -26,6 +27,13 @@ interface UseSettingsResult {
   settings: AppSettings
   updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>
   loaded: boolean
+}
+
+interface UseDiagnosticsResult {
+  report?: DiagnosticReport
+  isRunning: boolean
+  error?: string
+  run: () => Promise<void>
 }
 
 const hasApi = (): boolean => typeof window !== 'undefined' && Boolean(window.api)
@@ -187,6 +195,31 @@ export function useSettings(): UseSettingsResult {
   }, [])
 
   return { settings, updateSettings, loaded }
+}
+
+export function useDiagnostics(): UseDiagnosticsResult {
+  const [report, setReport] = useState<DiagnosticReport | undefined>()
+  const [isRunning, setIsRunning] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+
+  const run = useCallback(async (): Promise<void> => {
+    if (!hasApi()) {
+      setError('Electron API is not available.')
+      return
+    }
+
+    setIsRunning(true)
+    setError(undefined)
+    try {
+      setReport(await window.api.getDiagnostics())
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : 'Diagnostics failed.')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [])
+
+  return { report, isRunning, error, run }
 }
 
 export function useAppVersion(): string {

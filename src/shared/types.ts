@@ -33,6 +33,39 @@ export interface LogEntry {
   type: 'stdout' | 'stderr' | 'info'
 }
 
+export type DiagnosticStatus = 'pass' | 'warning' | 'error' | 'info'
+
+export type DiagnosticCheckId =
+  | 'adbRuntime'
+  | 'gnirehtetRuntime'
+  | 'adbQuery'
+  | 'deviceAccess'
+  | 'androidVersion'
+  | 'gnirehtetClient'
+
+export interface DiagnosticCheck {
+  id: DiagnosticCheckId
+  status: DiagnosticStatus
+  detail?: string
+}
+
+export interface DiagnosticDevice {
+  id: string
+  name: string
+  status: AdbDevice['status']
+  androidVersion?: string
+  apiLevel?: string
+  gnirehtetInstalled?: boolean
+  gnirehtetActive?: boolean
+}
+
+export interface DiagnosticReport {
+  generatedAt: string
+  engineStatus: ConnectionStatus
+  checks: DiagnosticCheck[]
+  devices: DiagnosticDevice[]
+}
+
 export interface GnirehtetAPI {
   startGnirehtet: (dns: string, port: string) => Promise<ActionResult>
   stopGnirehtet: () => Promise<ActionResult>
@@ -41,6 +74,7 @@ export interface GnirehtetAPI {
   getSettings: () => Promise<AppSettings>
   saveSettings: (settings: AppSettings) => Promise<AppSettings>
   getAppVersion: () => Promise<string>
+  getDiagnostics: () => Promise<DiagnosticReport>
   testSpeedOnDevice: (deviceId: string) => Promise<ActionResult>
   openExternal: (url: string) => Promise<ActionResult>
   windowControl: (action: 'minimize' | 'maximize' | 'close') => void

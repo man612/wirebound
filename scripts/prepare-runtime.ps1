@@ -4,11 +4,12 @@ $PlatformToolsVersion = '37.0.1'
 $PlatformToolsSha256 = '45f4d63113e895ebde0c90f194099a4676b6ac653bd28d54314a9e022bbc1a99'
 $GnirehtetVersion = '2.5.1'
 $GnirehtetSha256 = '7f5b1063e7895182aa60def1437e50363c3758144088dcd079037bb7c3c46a1c'
+$RuntimeLayout = 'minimal-v1'
 
 $Root = Split-Path -Parent $PSScriptRoot
 $Bin = Join-Path $Root 'bin'
 $Marker = Join-Path $Bin '.runtime-versions'
-$ExpectedMarker = "platform-tools=$PlatformToolsVersion`ngnirehtet=$GnirehtetVersion`n"
+$ExpectedMarker = "platform-tools=$PlatformToolsVersion`ngnirehtet=$GnirehtetVersion`nlayout=$RuntimeLayout`n"
 $AdbExe = Join-Path $Bin 'platform-tools\adb.exe'
 $GnirehtetExe = Join-Path $Bin 'gnirehtet-rust-win64\gnirehtet.exe'
 
@@ -56,10 +57,22 @@ try {
   Expand-Archive -Path $PlatformZip -DestinationPath $PlatformExtract -Force
   Expand-Archive -Path $GnirehtetZip -DestinationPath $GnirehtetExtract -Force
 
-  Remove-Item (Join-Path $Bin 'platform-tools') -Recurse -Force -ErrorAction SilentlyContinue
-  Remove-Item (Join-Path $Bin 'gnirehtet-rust-win64') -Recurse -Force -ErrorAction SilentlyContinue
-  Copy-Item (Join-Path $PlatformExtract 'platform-tools') (Join-Path $Bin 'platform-tools') -Recurse
-  Copy-Item (Join-Path $GnirehtetExtract 'gnirehtet-rust-win64') (Join-Path $Bin 'gnirehtet-rust-win64') -Recurse
+  $PlatformSource = Join-Path $PlatformExtract 'platform-tools'
+  $PlatformDestination = Join-Path $Bin 'platform-tools'
+  $GnirehtetSource = Join-Path $GnirehtetExtract 'gnirehtet-rust-win64'
+  $GnirehtetDestination = Join-Path $Bin 'gnirehtet-rust-win64'
+
+  if (Test-Path $PlatformDestination) { Remove-Item $PlatformDestination -Recurse -Force }
+  if (Test-Path $GnirehtetDestination) { Remove-Item $GnirehtetDestination -Recurse -Force }
+  New-Item -ItemType Directory -Force $PlatformDestination | Out-Null
+  New-Item -ItemType Directory -Force $GnirehtetDestination | Out-Null
+
+  @('adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll', 'NOTICE.txt', 'source.properties') | ForEach-Object {
+    Copy-Item (Join-Path $PlatformSource $_) (Join-Path $PlatformDestination $_)
+  }
+  @('gnirehtet.exe', 'gnirehtet.apk') | ForEach-Object {
+    Copy-Item (Join-Path $GnirehtetSource $_) (Join-Path $GnirehtetDestination $_)
+  }
   [System.IO.File]::WriteAllText($Marker, $ExpectedMarker, [System.Text.UTF8Encoding]::new($false))
 
   Write-Host "Prepared Android Platform Tools $PlatformToolsVersion and Gnirehtet $GnirehtetVersion."

@@ -4,7 +4,7 @@ import Sidebar from './components/layout/Sidebar'
 import OnboardingScreen from './components/OnboardingScreen'
 import Dashboard from './components/views/Dashboard'
 import Settings from './components/views/Settings'
-import { useAppVersion, useDevices, useGnirehtet, useSettings } from './hooks'
+import { useAppVersion, useDevices, useDiagnostics, useGnirehtet, useSettings } from './hooks'
 import type { Language } from './i18n'
 import { translations } from './i18n'
 
@@ -13,6 +13,7 @@ function App(): React.JSX.Element {
   const { status, logs, isLoading, start, stop, clearLogs } = useGnirehtet()
   const { devices, error: adbError } = useDevices()
   const { settings, updateSettings, loaded } = useSettings()
+  const diagnostics = useDiagnostics()
   const version = useAppVersion()
   const t = translations[(settings?.language as Language) || 'en']
 
@@ -74,6 +75,7 @@ function App(): React.JSX.Element {
                   adbError={adbError}
                   logs={logs}
                   onClearLogs={clearLogs}
+                  diagnostics={diagnostics}
                   t={t}
                 />
               )}
