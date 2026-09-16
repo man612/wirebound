@@ -1,38 +1,36 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import TitleBar from './components/layout/TitleBar'
 import Sidebar from './components/layout/Sidebar'
 import OnboardingScreen from './components/OnboardingScreen'
 import Dashboard from './components/views/Dashboard'
 import Settings from './components/views/Settings'
-import { useGnirehtet, useDevices, useSettings, useTraffic } from './hooks'
+import { useAppVersion, useDevices, useGnirehtet, useSettings } from './hooks'
 import type { Language } from './i18n'
 import { translations } from './i18n'
 
 function App(): React.JSX.Element {
   const [activePage, setActivePage] = useState<'dashboard' | 'settings'>('dashboard')
   const { status, logs, isLoading, start, stop, clearLogs } = useGnirehtet()
-  const { devices } = useDevices()
+  const { devices, error: adbError } = useDevices()
   const { settings, updateSettings, loaded } = useSettings()
-  const isConnected = status === 'connected'
-  const { data: trafficData } = useTraffic(isConnected)
-
+  const version = useAppVersion()
   const t = translations[(settings?.language as Language) || 'en']
 
   const handleStart = async (): Promise<void> => {
     const dns = settings.dns === 'custom' ? settings.customDns : settings.dns
     const port = settings.port || '31416'
-    const res = await start(dns || '8.8.8.8', port)
+    const result = await start(dns || '8.8.8.8', port)
 
-    if (!res.success) {
-      console.warn('Failed to start Wirebound.', res.error)
+    if (!result.success) {
+      console.warn('Failed to start Wirebound.', result.error)
     }
   }
 
   const handleStop = async (): Promise<void> => {
-    const res = await stop()
+    const result = await stop()
 
-    if (!res.success) {
-      console.warn('Failed to stop Wirebound.', res.error)
+    if (!result.success) {
+      console.warn('Failed to stop Wirebound.', result.error)
     }
   }
 
@@ -45,16 +43,11 @@ function App(): React.JSX.Element {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }
 
-  // Sync theme on load
   useEffect(() => {
     if (loaded && settings?.theme) {
       const theme = settings.theme
       document.documentElement.setAttribute('data-theme', theme)
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
+      document.documentElement.classList.toggle('dark', theme === 'dark')
     }
   }, [loaded, settings?.theme])
 
@@ -68,9 +61,8 @@ function App(): React.JSX.Element {
 
       {settings.onboardingCompleted && (
         <>
-          <Sidebar activePage={activePage} onNavigate={setActivePage} t={t} />
+          <Sidebar activePage={activePage} onNavigate={setActivePage} t={t} version={version} />
           <main className="flex-grow relative overflow-hidden bg-bg-surface pt-8 theme-transition">
-            {/* Transition key mereset state animasi agar perpindahan view terasa mulus */}
             <div key={activePage} className="h-full">
               {activePage === 'dashboard' && (
                 <Dashboard
@@ -79,14 +71,19 @@ function App(): React.JSX.Element {
                   onStart={handleStart}
                   onStop={handleStop}
                   devices={devices}
-                  trafficData={trafficData}
+                  adbError={adbError}
                   logs={logs}
                   onClearLogs={clearLogs}
                   t={t}
                 />
               )}
               {activePage === 'settings' && (
-                <Settings settings={settings} updateSettings={updateSettings} t={t} />
+                <Settings
+                  settings={settings}
+                  updateSettings={updateSettings}
+                  version={version}
+                  t={t}
+                />
               )}
             </div>
           </main>

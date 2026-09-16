@@ -1,28 +1,29 @@
 # Third-Party Notices
 
-Wirebound includes and/or uses third-party open-source components. This file lists major third-party components bundled or used by this project.
+Wirebound uses and redistributes third-party components. Release builds fetch pinned upstream artifacts during the build instead of storing executable binaries in the Git repository.
 
 ## Gnirehtet
 
-Gnirehtet is an open-source reverse tethering tool created by Genymobile.
+Gnirehtet is an open-source reverse-tethering tool created by Genymobile.
 
-- **Original repository**: [https://github.com/Genymobile/gnirehtet](https://github.com/Genymobile/gnirehtet)
-- **License**: Apache License 2.0
-- **Copyright**: Copyright (C) Genymobile and Gnirehtet contributors.
-- **Bundled Version**: Gnirehtet v2.5.1 (Rust Windows build).
-- **Modification Status**: Wirebound uses the original Gnirehtet binaries as an underlying engine. No modifications have been made to the Gnirehtet source code itself. The primary development focus of Wirebound is the GUI, automation, process management, and multi-device workflow integration.
+- Original repository: https://github.com/Genymobile/gnirehtet
+- License: Apache License 2.0
+- Bundled version: **2.5.1**, Rust Windows build
+- Archive SHA-256: `7f5b1063e7895182aa60def1437e50363c3758144088dcd079037bb7c3c46a1c`
+- Modification status: Wirebound uses the original upstream Windows runtime and APK. Wirebound does not modify Gnirehtet source code.
 
-**Use in Wirebound:**
-Wirebound uses Gnirehtet as the reverse tethering engine and provides a desktop GUI, automation, logging, DNS/port configuration, traffic monitoring, and multi-device management around it.
+Wirebound uses Gnirehtet as the reverse-tethering engine and adds Windows GUI, lifecycle management, settings, status handling, logs, and device workflow integration around it.
 
 ## Android SDK Platform Tools / ADB
 
-Android Debug Bridge (ADB) is part of Android SDK Platform Tools.
+Android Debug Bridge (ADB) is distributed as part of Android SDK Platform Tools by Google.
 
-- **Original source**: [https://developer.android.com/tools/releases/platform-tools](https://developer.android.com/tools/releases/platform-tools)
-- **Bundled Version**: Latest stable Android Platform Tools.
+- Official release information: https://developer.android.com/tools/releases/platform-tools
+- Bundled version: **37.0.1**, Windows
+- Archive SHA-256: `45f4d63113e895ebde0c90f194099a4676b6ac653bd28d54314a9e022bbc1a99`
 
-**Use in Wirebound:**
-Wirebound uses ADB to detect Android devices, authorize USB debugging, and manage the connection required by Gnirehtet.
+Wirebound uses ADB to discover authorized Android devices, inspect device state, launch the speed-test URL, detect the Gnirehtet client, and stop that client during cleanup.
 
-Please refer to the Android SDK Platform Tools license terms from Google for details.
+The hashes above are also enforced by `scripts/prepare-runtime.ps1`. If an upstream artifact changes, the build fails until the pinned version and checksum are intentionally reviewed and updated.
+
+Refer to the respective upstream projects and distribution terms for complete copyright and license information.

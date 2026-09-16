@@ -5,9 +5,15 @@ interface SidebarProps {
   activePage: 'dashboard' | 'settings'
   onNavigate: (page: 'dashboard' | 'settings') => void
   t: Translation
+  version: string
 }
 
-export default function Sidebar({ activePage, onNavigate, t }: SidebarProps): React.JSX.Element {
+export default function Sidebar({
+  activePage,
+  onNavigate,
+  t,
+  version
+}: SidebarProps): React.JSX.Element {
   return (
     <aside className="w-[200px] border-r border-border-subtle bg-bg-primary flex flex-col justify-between pt-8 pb-4 shrink-0 theme-transition">
       <div className="pt-4">
@@ -44,7 +50,7 @@ export default function Sidebar({ activePage, onNavigate, t }: SidebarProps): Re
         </button>
       </div>
       <div className="px-4 text-[11px] text-text-muted font-mono transition-colors duration-200 hover:text-text-secondary cursor-default">
-        v1.0.0
+        {version ? `v${version}` : '...'}
       </div>
     </aside>
   )

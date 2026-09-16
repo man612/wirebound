@@ -1,43 +1,53 @@
 # Wirebound Roadmap
 
-Wirebound is a small Windows desktop utility that makes Android reverse tethering easier to use through a graphical interface.
+Wirebound is a small Windows desktop utility that makes Android reverse tethering through Gnirehtet easier to operate and troubleshoot.
 
 ## Current focus
 
-- Improve Windows setup reliability
-- Improve ADB device detection troubleshooting
-- Make first-run onboarding clearer for non-technical users
-- Reduce packaging size and startup overhead
-- Document common connection problems
+The current codebase prioritizes correctness and honest status reporting before adding more features.
 
-## Planned improvements
+Already implemented in the current development line:
 
-### 1. Better diagnostics
+- non-overlapping ADB polling
+- explicit ADB error reporting instead of treating failures as an empty device list
+- cached device metadata to reduce repeated ADB subprocesses
+- connection state based on both the desktop relay and Android Gnirehtet client
+- graceful relay/client cleanup on stop and application shutdown
+- pinned, checksum-verified Gnirehtet and Platform Tools runtimes
+- sandboxed Electron renderer and stricter IPC/external-navigation boundaries
+- Windows-native CI with unit tests and package smoke testing
+- removal of simulated traffic telemetry
 
-Wirebound should provide clearer messages when:
-- ADB is not available
-- No Android device is detected
-- USB Debugging is disabled
-- VPN permission is not accepted on the Android device
-- Gnirehtet runtime files are missing
+## Next priorities
 
-### 2. Lighter Windows packaging
+### 1. Real-world compatibility testing
 
-The current version uses Electron. Future work may explore build optimization or a lighter native Windows architecture while keeping the interface simple.
+Test more combinations of Windows versions, USB drivers, Android releases, OEM firmware, multiple devices, disconnect/reconnect scenarios, and VPN-permission behavior.
 
-### 3. Portable build
+### 2. Better diagnostics
 
-A portable package may help users run Wirebound without a full installer.
+Improve user-facing explanations for driver failures, missing runtime files, ADB server problems, VPN permission rejection, relay exits, and partial multi-device failures.
 
-### 4. Documentation
+### 3. Measured traffic telemetry
 
-The project needs clearer guides for:
-- First-time setup
-- USB Debugging
-- ADB authorization
-- Common Windows driver issues
-- Troubleshooting connection failures
+A traffic monitor should return only if Wirebound has a reliable source of real RX/TX counters with documented units and failure behavior. Animated or simulated throughput is intentionally not part of the product.
 
-## Maintainer note
+### 4. Release quality
 
-This project is early, but it solves a practical usability problem: reverse tethering tools are often terminal-based and confusing for non-technical users. Wirebound aims to make that workflow easier on Windows.
+Keep release artifacts reproducible, attach checksums, verify packaged runtime contents, and improve smoke testing around launch/start/stop behavior.
+
+### 5. Packaging size
+
+Electron is still acceptable for the current product. Size and startup improvements should be measured before considering a framework rewrite. A Tauri/native migration is only worth revisiting after behavior is well covered by tests.
+
+### 6. Documentation
+
+Expand first-run help for USB debugging, ADB authorization, Windows drivers, VPN permission, and common failure states.
+
+## Platform scope
+
+Wirebound is Windows-only today. macOS/Linux targets should not be advertised until their runtime paths, dependencies, packaging, and behavior are actually implemented and tested.
+
+## Maintainer principle
+
+Prefer a small feature set that reports its state truthfully over a larger interface that guesses, simulates, or hides failure modes.

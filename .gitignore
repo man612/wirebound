@@ -8,3 +8,8 @@ out
 *.zip
 *.7z
 .vscode/
+
+bin/platform-tools/**
+bin/gnirehtet-rust-win64/**
+bin/.runtime-versions
+!bin/README.md

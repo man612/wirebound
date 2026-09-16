@@ -1,17 +1,19 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { existsSync } from 'fs'
+import { isIP } from 'net'
 import type { RuntimePaths } from '../appPaths'
 import type { ActionResult, AdbDevice, ConnectionStatus, LogEntry } from '../../shared/types'
-import type { AdbService } from './adbService'
+import { WIREBOUND_ADB_SERVER_PORT, type AdbService } from './adbService'
 
 type LogSender = (message: string, type?: LogEntry['type']) => void
 type StatusSender = (status: ConnectionStatus) => void
 
-function normalizeDns(value: string): string {
-  return value.trim() || '8.8.8.8'
+export function normalizeDns(value: string): string {
+  const dns = value.trim()
+  return isIP(dns) === 4 ? dns : '8.8.8.8'
 }
 
-function normalizePort(value: string): string {
+export function normalizePort(value: string): string {
   const port = Number(value.trim())
   return Number.isInteger(port) && port >= 1 && port <= 65535 ? String(port) : '31416'
 }
@@ -24,7 +26,7 @@ export class GnirehtetService {
   private childProcess: ChildProcessWithoutNullStreams | null = null
   private status: ConnectionStatus = 'disconnected'
   private isStopping = false
-  private lastDeviceSync = 0
+  private lastAdbError: string | null = null
 
   public constructor(
     private readonly paths: RuntimePaths,
@@ -40,44 +42,47 @@ export class GnirehtetService {
   public async start(dnsInput: string, portInput: string): Promise<ActionResult> {
     if (this.childProcess) {
       await this.syncStatusWithDeviceState()
-
-      if (this.status === 'disconnected' || this.status === 'error') {
-        this.setStatus('connecting')
-      }
-
       this.sendLog('Wirebound engine is already running.', 'info')
       return { success: true }
     }
 
     if (!existsSync(this.paths.gnirehtetExe)) {
-      return this.fail(`Gnirehtet executable not found: ${this.paths.gnirehtetExe}`)
+      return this.fail(`Gnirehtet runtime not found: ${this.paths.gnirehtetExe}`)
     }
 
     const dns = normalizeDns(dnsInput)
     const port = normalizePort(portInput)
 
+    this.isStopping = false
+    this.lastAdbError = null
     this.setStatus('connecting')
     this.sendLog(`Starting Wirebound engine (DNS: ${dns}, Port: ${port})`)
 
     try {
-      this.isStopping = false
-      this.childProcess = spawn(this.paths.gnirehtetExe, ['autorun', '-d', dns, '-p', port], {
+      const childProcess = spawn(this.paths.gnirehtetExe, ['autorun', '-d', dns, '-p', port], {
         cwd: this.paths.gnirehtetDir,
         env: {
           ...process.env,
-          PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`
+          PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`,
+          ANDROID_ADB_SERVER_PORT: WIREBOUND_ADB_SERVER_PORT
         },
         windowsHide: true
       })
 
-      this.attachProcessEvents(this.childProcess)
+      this.childProcess = childProcess
+      this.attachProcessEvents(childProcess)
       return { success: true }
     } catch (error) {
+      this.childProcess = null
       return this.fail(readError(error, 'Failed to start Gnirehtet.'))
     }
   }
 
   public async stop(): Promise<ActionResult> {
+    if (this.isStopping) {
+      return { success: true }
+    }
+
     this.isStopping = true
     this.sendLog('Stopping Wirebound engine...')
 
@@ -85,11 +90,19 @@ export class GnirehtetService {
       if (this.childProcess) {
         const processToStop = this.childProcess
         processToStop.kill()
-        await this.waitForProcessClose(processToStop)
-        this.childProcess = null
+
+        const closed = await this.waitForProcessClose(processToStop)
+        if (!closed) {
+          this.sendLog('Engine did not confirm shutdown within 2 seconds.', 'stderr')
+        }
+
+        if (this.childProcess === processToStop) {
+          this.childProcess = null
+        }
       }
 
       const stoppedClients = await this.adbService.stopAllClients()
+      this.lastAdbError = null
       this.setStatus('disconnected')
       this.sendLog(`Stopped. Cleaned ${stoppedClients} device client(s).`)
       return { success: true }
@@ -100,72 +113,82 @@ export class GnirehtetService {
     }
   }
 
-  public dispose(): void {
-    if (this.childProcess) {
-      this.childProcess.kill()
-      this.childProcess = null
+  public reportAdbUnavailable(error: string): void {
+    if (this.lastAdbError !== error) {
+      this.sendLog(`ADB unavailable: ${error}`, 'stderr')
+      this.lastAdbError = error
+    }
+
+    if (this.childProcess || this.status === 'connecting' || this.status === 'connected') {
+      this.setStatus('error')
     }
   }
 
   public async syncStatusWithDeviceState(devices?: AdbDevice[]): Promise<void> {
-    const now = Date.now()
-
-    if (now - this.lastDeviceSync < 2500) {
+    if (this.isStopping) {
       return
     }
 
-    this.lastDeviceSync = now
-
-    if (this.isStopping) {
+    if (!this.childProcess) {
+      this.lastAdbError = null
+      if (this.status === 'connected' || this.status === 'connecting') {
+        this.setStatus('disconnected')
+      }
       return
     }
 
     try {
       const activeClients = await this.adbService.getActiveGnirehtetClients(devices)
-
-      if (activeClients.length > 0) {
-        this.setStatus('connected')
-      } else if (this.childProcess && this.status === 'error') {
-        this.setStatus('connecting')
-      } else if (!this.childProcess && this.status === 'connected') {
-        this.setStatus('disconnected')
-      }
+      this.lastAdbError = null
+      this.setStatus(activeClients.length > 0 ? 'connected' : 'connecting')
     } catch (error) {
-      console.warn('Wirebound: Failed to sync Gnirehtet status from device state.', error)
+      this.reportAdbUnavailable(readError(error, 'Unable to query Gnirehtet client state.'))
     }
   }
 
   private attachProcessEvents(childProcess: ChildProcessWithoutNullStreams): void {
     childProcess.stdout.on('data', (data) => this.handleOutput(data, 'stdout'))
     childProcess.stderr.on('data', (data) => this.handleOutput(data, 'stderr'))
-    childProcess.on('error', (error) => {
-      this.fail(readError(error, 'Gnirehtet process failed.'))
-      this.childProcess = null
-    })
-    childProcess.on('close', (code) => {
-      const stoppedByUser = this.isStopping
-      this.childProcess = null
 
-      if (!stoppedByUser) {
+    childProcess.on('error', (error) => {
+      if (this.childProcess === childProcess) {
+        this.childProcess = null
+      }
+      this.fail(readError(error, 'Gnirehtet process failed.'))
+    })
+
+    childProcess.on('close', (code) => {
+      if (this.childProcess === childProcess) {
+        this.childProcess = null
+      }
+
+      if (!this.isStopping) {
         void this.handleUnexpectedClose(code)
       }
     })
   }
 
   private async handleUnexpectedClose(code: number | null): Promise<void> {
-    const activeClients = await this.adbService.getActiveGnirehtetClients()
-
-    if (activeClients.length > 0) {
+    try {
+      const stoppedClients = await this.adbService.stopAllClients()
+      if (stoppedClients > 0) {
+        this.sendLog(`Cleaned ${stoppedClients} Android client(s) after relay exit.`, 'info')
+      }
+    } catch (error) {
       this.sendLog(
-        `Engine process exited with code ${code ?? 'unknown'}, but ${activeClients.length} device client(s) are still active.`,
-        'info'
+        `Could not clean Android clients: ${readError(error, 'Unknown ADB error')}`,
+        'stderr'
       )
-      this.setStatus('connected')
-      return
     }
 
-    this.sendLog(`Engine exited with code ${code ?? 'unknown'}.`, code === 0 ? 'info' : 'stderr')
-    this.setStatus(code === 0 ? 'disconnected' : 'error')
+    const exitCode = code ?? 'unknown'
+    if (code === 0) {
+      this.sendLog(`Engine exited with code ${exitCode}.`, 'info')
+      this.setStatus('disconnected')
+    } else {
+      this.sendLog(`Engine exited unexpectedly with code ${exitCode}.`, 'stderr')
+      this.setStatus('error')
+    }
   }
 
   private handleOutput(data: Buffer, type: LogEntry['type']): void {
@@ -174,41 +197,25 @@ export class GnirehtetService {
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean)
-      .forEach((line) => {
-        this.sendLog(line, type)
-        this.updateStatusFromLog(line, type)
-      })
+      .forEach((line) => this.sendLog(line, type))
   }
 
-  private updateStatusFromLog(message: string, type: LogEntry['type']): void {
-    const lowerMessage = message.toLowerCase()
-
-    if (type === 'stderr') {
-      return
-    }
-
-    if (
-      /\b(client|relay|tunnel|vpn)\b.*\b(start|started|open|opened|connect|connected|listen|listening|running)/i.test(
-        message
-      ) ||
-      lowerMessage.includes('connected') ||
-      lowerMessage.includes('client started')
-    ) {
-      this.setStatus('connected')
-    }
-  }
-
-  private waitForProcessClose(childProcess: ChildProcessWithoutNullStreams): Promise<void> {
+  private waitForProcessClose(childProcess: ChildProcessWithoutNullStreams): Promise<boolean> {
     return new Promise((resolve) => {
-      const timeout = setTimeout(resolve, 2000)
+      const timeout = setTimeout(() => resolve(false), 2000)
+
       childProcess.once('close', () => {
         clearTimeout(timeout)
-        resolve()
+        resolve(true)
       })
     })
   }
 
   private setStatus(status: ConnectionStatus): void {
+    if (this.status === status) {
+      return
+    }
+
     this.status = status
     this.sendStatus(status)
   }

@@ -5,8 +5,7 @@ import type {
   AdbDevice,
   AppSettings,
   ConnectionStatus,
-  LogEntry,
-  TrafficDataPoint
+  LogEntry
 } from '../../../shared/types'
 
 interface UseGnirehtetResult {
@@ -20,16 +19,13 @@ interface UseGnirehtetResult {
 
 interface UseDevicesResult {
   devices: AdbDevice[]
+  error?: string
 }
 
 interface UseSettingsResult {
   settings: AppSettings
   updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>
   loaded: boolean
-}
-
-interface UseTrafficResult {
-  data: TrafficDataPoint[]
 }
 
 const hasApi = (): boolean => typeof window !== 'undefined' && Boolean(window.api)
@@ -47,17 +43,13 @@ export function useGnirehtet(): UseGnirehtetResult {
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (!hasApi()) {
-      return
-    }
+    if (!hasApi()) return
 
     let mounted = true
     void window.api
       .getStatus()
       .then((currentStatus) => {
-        if (mounted) {
-          setStatus(currentStatus)
-        }
+        if (mounted) setStatus(currentStatus)
       })
       .catch((error: unknown) => console.warn('Failed to load current status.', error))
 
@@ -65,10 +57,9 @@ export function useGnirehtet(): UseGnirehtetResult {
       setStatus(newStatus)
       setIsLoading(false)
     })
-
     const unsubLog = window.api.onLog((entry) => {
-      setLogs((prev) => {
-        const updated = [...prev, entry]
+      setLogs((previous) => {
+        const updated = [...previous, entry]
         return updated.length > 500 ? updated.slice(-500) : updated
       })
     })
@@ -81,17 +72,12 @@ export function useGnirehtet(): UseGnirehtetResult {
   }, [])
 
   const start = useCallback(async (dns: string, port: string): Promise<ActionResult> => {
-    if (!hasApi()) {
-      return { success: false, error: 'Electron API is not available.' }
-    }
+    if (!hasApi()) return { success: false, error: 'Electron API is not available.' }
 
     setIsLoading(true)
-
     try {
       const result = await window.api.startGnirehtet(dns, port)
-      if (!result.success) {
-        setIsLoading(false)
-      }
+      if (!result.success) setIsLoading(false)
       return result
     } catch (error) {
       setIsLoading(false)
@@ -100,12 +86,9 @@ export function useGnirehtet(): UseGnirehtetResult {
   }, [])
 
   const stop = useCallback(async (): Promise<ActionResult> => {
-    if (!hasApi()) {
-      return { success: false, error: 'Electron API is not available.' }
-    }
+    if (!hasApi()) return { success: false, error: 'Electron API is not available.' }
 
     setIsLoading(true)
-
     try {
       const result = await window.api.stopGnirehtet()
       setIsLoading(false)
@@ -116,33 +99,35 @@ export function useGnirehtet(): UseGnirehtetResult {
     }
   }, [])
 
-  const clearLogs = useCallback((): void => {
-    setLogs([])
-  }, [])
+  const clearLogs = useCallback((): void => setLogs([]), [])
 
   return { status, logs, isLoading, start, stop, clearLogs }
 }
 
 export function useDevices(): UseDevicesResult {
   const [devices, setDevices] = useState<AdbDevice[]>([])
+  const [error, setError] = useState<string | undefined>()
 
   useEffect(() => {
-    if (!hasApi()) {
-      return
-    }
+    if (!hasApi()) return
 
     let mounted = true
     void window.api
-      .getDevices()
-      .then((currentDevices) => {
-        if (mounted) {
-          setDevices(currentDevices)
-        }
+      .getDeviceSnapshot()
+      .then((snapshot) => {
+        if (!mounted) return
+        setDevices(snapshot.devices)
+        setError(snapshot.error)
       })
-      .catch((error: unknown) => console.warn('Failed to load devices.', error))
+      .catch((loadError: unknown) => {
+        if (!mounted) return
+        setDevices([])
+        setError(loadError instanceof Error ? loadError.message : 'Failed to query ADB devices.')
+      })
 
-    const unsub = window.api.onDevicesChange((newDevices) => {
-      setDevices(newDevices)
+    const unsub = window.api.onDevicesChange((snapshot) => {
+      setDevices(snapshot.devices)
+      setError(snapshot.error)
     })
 
     return () => {
@@ -151,7 +136,7 @@ export function useDevices(): UseDevicesResult {
     }
   }, [])
 
-  return { devices }
+  return { devices, error }
 }
 
 export function useSettings(): UseSettingsResult {
@@ -164,25 +149,20 @@ export function useSettings(): UseSettingsResult {
   }, [settings])
 
   useEffect(() => {
-    if (!hasApi()) {
-      return
-    }
+    if (!hasApi()) return
 
     let mounted = true
     void window.api
       .getSettings()
       .then((loadedSettings) => {
-        if (mounted) {
-          settingsRef.current = loadedSettings
-          setSettings(loadedSettings)
-          setLoaded(true)
-        }
+        if (!mounted) return
+        settingsRef.current = loadedSettings
+        setSettings(loadedSettings)
+        setLoaded(true)
       })
       .catch((error: unknown) => {
         console.warn('Failed to load settings.', error)
-        if (mounted) {
-          setLoaded(true)
-        }
+        if (mounted) setLoaded(true)
       })
 
     return () => {
@@ -195,9 +175,7 @@ export function useSettings(): UseSettingsResult {
     settingsRef.current = nextSettings
     setSettings(nextSettings)
 
-    if (!hasApi()) {
-      return
-    }
+    if (!hasApi()) return
 
     try {
       const savedSettings = await window.api.saveSettings(nextSettings)
@@ -211,49 +189,24 @@ export function useSettings(): UseSettingsResult {
   return { settings, updateSettings, loaded }
 }
 
-export function useTraffic(isConnected: boolean): UseTrafficResult {
-  const [data, setData] = useState<TrafficDataPoint[]>([])
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+export function useAppVersion(): string {
+  const [version, setVersion] = useState('')
 
   useEffect(() => {
-    if (!isConnected) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      return
-    }
+    if (!hasApi()) return
 
-    intervalRef.current = setInterval(() => {
-      const now = new Date()
-      const time = now.toLocaleTimeString('id-ID', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+    let mounted = true
+    void window.api
+      .getAppVersion()
+      .then((appVersion) => {
+        if (mounted) setVersion(appVersion)
       })
-
-      setData((prev) => {
-        const updated = [
-          ...prev,
-          {
-            time,
-            upload: Math.random() * 50 + 5,
-            download: Math.random() * 120 + 10
-          }
-        ]
-
-        return updated.length > 30 ? updated.slice(-30) : updated
-      })
-    }, 2000)
+      .catch((error: unknown) => console.warn('Failed to load application version.', error))
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+      mounted = false
     }
-  }, [isConnected])
+  }, [])
 
-  return { data }
+  return version
 }

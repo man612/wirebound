@@ -1,6 +1,6 @@
 {
   "name": "wirebound",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Desktop GUI for Gnirehtet reverse tethering",
   "main": "./out/main/index.js",
   "author": "man612",
@@ -14,17 +14,17 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
-    "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "build:unpack": "npm run runtime:prepare && npm run build && electron-builder --win --dir",
+    "build:win": "npm run runtime:prepare && npm run build && electron-builder --win",
+    "runtime:prepare": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-runtime.ps1",
+    "predev": "npm run runtime:prepare",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package:check": "npm run runtime:prepare && npm run build && electron-builder --win --dir"
   },
   "dependencies": {
-    "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "lucide-react": "^1.14.0",
-    "recharts": "^3.8.1"
+    "lucide-react": "^1.14.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -35,8 +35,8 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "electron": "^39.2.6",
-    "electron-builder": "^26.0.12",
+    "electron": "44.4.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react": "^7.37.5",
@@ -47,6 +47,13 @@
     "react-dom": "^19.2.3",
     "tailwindcss": "^4.2.4",
     "typescript": "^5.9.3",
-    "vite": "^7.2.6"
+    "vite": "^7.2.6",
+    "vitest": "^5.0.1"
+  },
+  "private": true,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/man612/wirebound.git"
   }
 }

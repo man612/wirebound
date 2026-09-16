@@ -1,8 +1,12 @@
 appId: com.wirebound.app
 productName: Wirebound
+asar: true
+compression: maximum
+
 directories:
   buildResources: build
   output: dist
+
 extraResources:
   - from: bin/gnirehtet-rust-win64
     to: bin/gnirehtet-rust-win64
@@ -10,11 +14,13 @@ extraResources:
     to: bin/platform-tools
   - from: src/renderer/src/assets/icon.png
     to: icon.png
+
 files:
   - '!**/.vscode/*'
   - '!dist/**'
   - '!bin/**'
   - '!src/*'
+  - '!scripts/**'
   - '!*.exe'
   - '!*.blockmap'
   - '!*.zip'
@@ -23,11 +29,13 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-asarUnpack:
-  - resources/**
+
 win:
   executableName: wirebound
   icon: build/icon.ico
+  target:
+    - nsis
+
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   installerIcon: build/icon.ico
@@ -35,18 +43,3 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
-mac:
-  entitlementsInherit: build/entitlements.mac.plist
-  notarize: false
-dmg:
-  artifactName: ${name}-${version}.${ext}
-linux:
-  target:
-    - AppImage
-    - snap
-    - deb
-  maintainer: man612
-  category: Utility
-appImage:
-  artifactName: ${name}-${version}.${ext}
-npmRebuild: false
