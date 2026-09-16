@@ -1,18 +1,27 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Battery,
   CheckCircle2,
+  ClipboardCopy,
   Laptop,
   Play,
+  RefreshCw,
   ShieldAlert,
   Square as StopSquare,
+  Stethoscope,
   Terminal,
   Usb,
   Zap
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { AdbDevice, ConnectionStatus, LogEntry } from '../../../../shared/types'
+import type {
+  AdbDevice,
+  ConnectionStatus,
+  DiagnosticCheckId,
+  DiagnosticReport,
+  LogEntry
+} from '../../../../shared/types'
 import type { Translation } from '../../i18n'
 
 interface DashboardProps {
@@ -24,6 +33,12 @@ interface DashboardProps {
   adbError?: string
   logs: LogEntry[]
   onClearLogs: () => void
+  diagnostics: {
+    report?: DiagnosticReport
+    isRunning: boolean
+    error?: string
+    run: () => Promise<void>
+  }
   t: Translation
 }
 
@@ -118,6 +133,40 @@ function getDeviceSetupState(
   }
 }
 
+function getDiagnosticLabel(id: DiagnosticCheckId, t: Translation): string {
+  if (id === 'adbRuntime') return t.diagAdbRuntime
+  if (id === 'gnirehtetRuntime') return t.diagGnirehtetRuntime
+  if (id === 'adbQuery') return t.diagAdbQuery
+  if (id === 'deviceAccess') return t.diagDeviceAccess
+  if (id === 'androidVersion') return t.diagAndroidVersion
+  return t.diagGnirehtetClient
+}
+
+function formatDiagnosticReport(report: DiagnosticReport): string {
+  const lines = [
+    'Wirebound Diagnostic Report',
+    `Generated: ${report.generatedAt}`,
+    `Engine status: ${report.engineStatus}`,
+    '',
+    'Checks:'
+  ]
+
+  for (const check of report.checks) {
+    lines.push(`- [${check.status.toUpperCase()}] ${check.id}: ${check.detail ?? ''}`)
+  }
+
+  if (report.devices.length > 0) {
+    lines.push('', 'Devices:')
+    for (const device of report.devices) {
+      lines.push(
+        `- ${device.name} (${device.id}) | ${device.status} | Android ${device.androidVersion ?? '?'} / API ${device.apiLevel ?? '?'} | Gnirehtet installed: ${device.gnirehtetInstalled ? 'yes' : 'no'} | client active: ${device.gnirehtetActive ? 'yes' : 'no'}`
+      )
+    }
+  }
+
+  return lines.join('\n')
+}
+
 export default function Dashboard({
   status,
   isLoading,
@@ -127,6 +176,7 @@ export default function Dashboard({
   adbError,
   logs,
   onClearLogs,
+  diagnostics,
   t
 }: DashboardProps): React.JSX.Element {
   const isRunning = status === 'connected'
@@ -135,10 +185,23 @@ export default function Dashboard({
   const setupState = getDeviceSetupState(devices, status, adbError, t)
   const SetupIcon = setupState.icon
   const logEndRef = useRef<HTMLDivElement>(null)
+  const [reportCopied, setReportCopied] = useState(false)
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
+
+  const handleCopyDiagnostics = async (): Promise<void> => {
+    if (!diagnostics.report) return
+
+    try {
+      await navigator.clipboard.writeText(formatDiagnosticReport(diagnostics.report))
+      setReportCopied(true)
+      window.setTimeout(() => setReportCopied(false), 1500)
+    } catch (error) {
+      console.warn('Failed to copy diagnostic report.', error)
+    }
+  }
 
   const handleOpenDesktopSpeedTest = (): void => {
     void window.api.openExternal('https://fast.com')
@@ -254,6 +317,104 @@ export default function Dashboard({
               <p className="mt-1 break-all font-mono text-[10px] text-accent-red/80">{adbError}</p>
             )}
           </div>
+        </div>
+
+        <div className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Stethoscope size={14} className="text-accent-blue" />
+              <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                {t.diagnostics}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void handleCopyDiagnostics()}
+                disabled={!diagnostics.report}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ClipboardCopy size={12} />
+                {reportCopied ? t.reportCopied : t.copyReport}
+              </button>
+              <button
+                onClick={() => void diagnostics.run()}
+                disabled={diagnostics.isRunning}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-accent-blue/30 bg-accent-blue/10 px-2.5 py-1 text-[10px] font-semibold text-accent-blue transition-colors hover:bg-accent-blue/15 disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={diagnostics.isRunning ? 'animate-spin' : ''} />
+                {diagnostics.report ? t.rerunDiagnostics : t.runDiagnostics}
+              </button>
+            </div>
+          </div>
+
+          {!diagnostics.report && !diagnostics.error && (
+            <p className="mt-2 text-xs text-text-secondary">{t.diagnosticsIdle}</p>
+          )}
+          {diagnostics.error && (
+            <p className="mt-2 break-all font-mono text-[10px] text-accent-red">
+              {diagnostics.error}
+            </p>
+          )}
+          {diagnostics.report && (
+            <>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {diagnostics.report.checks.map((check) => (
+                  <div
+                    key={check.id}
+                    className="rounded-sm border border-border-subtle bg-bg-primary p-2.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          check.status === 'pass'
+                            ? 'bg-accent-green'
+                            : check.status === 'error'
+                              ? 'bg-accent-red'
+                              : check.status === 'warning'
+                                ? 'bg-accent-yellow'
+                                : 'bg-accent-blue'
+                        }`}
+                      />
+                      <span className="text-[11px] font-semibold text-text-primary">
+                        {getDiagnosticLabel(check.id, t)}
+                      </span>
+                    </div>
+                    {check.detail && (
+                      <p className="mt-1 break-words text-[10px] leading-relaxed text-text-muted">
+                        {check.detail}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {diagnostics.report.devices.length > 0 && (
+                <div className="mt-3 border-t border-border-subtle pt-2">
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                    {t.diagnosticDevices}
+                  </div>
+                  {diagnostics.report.devices.map((device) => (
+                    <div
+                      key={device.id}
+                      className="text-[10px] leading-relaxed text-text-secondary"
+                    >
+                      <span className="font-semibold text-text-primary">{device.name}</span> Â·{' '}
+                      {device.id} Â· {getDeviceStatusLabel(device.status, t)}
+                      {device.androidVersion &&
+                        ` Â· Android ${device.androidVersion} / API ${device.apiLevel ?? '?'}`}
+                      {device.status === 'device' &&
+                        ` Â· ${t.gnirehtetInstalled}: ${device.gnirehtetInstalled ? t.yes : t.no} Â· ${t.gnirehtetActive}: ${device.gnirehtetActive ? t.yes : t.no}`}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="mt-2 text-[9px] text-text-muted">
+                {t.diagnosticsGenerated}:{' '}
+                {new Date(diagnostics.report.generatedAt).toLocaleString()}
+              </p>
+            </>
+          )}
         </div>
 
         <div>

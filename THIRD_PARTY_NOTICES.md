@@ -21,8 +21,11 @@ Android Debug Bridge (ADB) is distributed as part of Android SDK Platform Tools 
 - Official release information: https://developer.android.com/tools/releases/platform-tools
 - Bundled version: **37.0.1**, Windows
 - Archive SHA-256: `45f4d63113e895ebde0c90f194099a4676b6ac653bd28d54314a9e022bbc1a99`
+- Redistributed subset: `adb.exe`, `AdbWinApi.dll`, `AdbWinUsbApi.dll`, `NOTICE.txt`, and `source.properties`
 
 Wirebound uses ADB to discover authorized Android devices, inspect device state, launch the speed-test URL, detect the Gnirehtet client, and stop that client during cleanup.
+
+Wirebound packages only `adb.exe`, `AdbWinApi.dll`, `AdbWinUsbApi.dll`, Google's `NOTICE.txt`, and `source.properties` from Platform Tools. At runtime the executable ADB files are copied into a content-addressed `%LOCALAPPDATA%\Wirebound\runtime` cache so Wirebound can share the standard ADB server on port 5037 without keeping packaged application files locked.
 
 The hashes above are also enforced by `scripts/prepare-runtime.ps1`. If an upstream artifact changes, the build fails until the pinned version and checksum are intentionally reviewed and updated.
 

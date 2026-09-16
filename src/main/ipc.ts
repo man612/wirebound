@@ -118,6 +118,11 @@ export function registerIpcHandlers({
     return app.getVersion()
   })
 
+  ipcMain.handle('app:diagnostics', (event) => {
+    trusted(event)
+    return adbService.getDiagnostics(gnirehtetService.getStatus())
+  })
+
   ipcMain.handle('app:open-external', (event, url: unknown) => {
     trusted(event)
     return openExternal(url)

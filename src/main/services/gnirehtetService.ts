@@ -3,7 +3,7 @@ import { existsSync } from 'fs'
 import { isIP } from 'net'
 import type { RuntimePaths } from '../appPaths'
 import type { ActionResult, AdbDevice, ConnectionStatus, LogEntry } from '../../shared/types'
-import { WIREBOUND_ADB_SERVER_PORT, type AdbService } from './adbService'
+import type { AdbService } from './adbService'
 
 type LogSender = (message: string, type?: LogEntry['type']) => void
 type StatusSender = (status: ConnectionStatus) => void
@@ -59,12 +59,12 @@ export class GnirehtetService {
     this.sendLog(`Starting Wirebound engine (DNS: ${dns}, Port: ${port})`)
 
     try {
+      await this.adbService.ensureServerReady()
       const childProcess = spawn(this.paths.gnirehtetExe, ['autorun', '-d', dns, '-p', port], {
         cwd: this.paths.gnirehtetDir,
         env: {
           ...process.env,
-          PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`,
-          ANDROID_ADB_SERVER_PORT: WIREBOUND_ADB_SERVER_PORT
+          PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`
         },
         windowsHide: true
       })
