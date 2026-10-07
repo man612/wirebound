@@ -183,7 +183,7 @@ export const translations = {
     copyReport: 'Salin Laporan',
     reportCopied: 'Tersalin',
     exportReport: 'Ekspor Laporan',
-    reportExported: 'Terekspor',
+    reportExported: 'Diekspor',
     diagnosticsIdle:
       'Periksa runtime bawaan, akses ADB, versi Android, dan status klien Gnirehtet.',
     diagnosticsGenerated: 'Dibuat',
@@ -256,7 +256,7 @@ export const translations = {
     clear: 'Bersihkan',
     deviceStatus: 'ADB',
     tunnelStatus: 'Tethering',
-    tunnelIdle: 'Diam',
+    tunnelIdle: 'Tidak aktif',
     tunnelWaiting: 'Menunggu',
     tunnelConnected: 'Terhubung',
     tunnelError: 'Error',
