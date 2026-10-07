@@ -5,6 +5,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   port: '31416',
   autoStart: false,
   launchAtLogin: false,
+  telemetryEnabled: false,
   customDns: '',
   theme: 'dark',
   language: 'en',
