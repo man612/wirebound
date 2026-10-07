@@ -359,10 +359,13 @@ export default function OnboardingScreen({
           ) : (
             <button
               onClick={() => void onComplete(lang, theme)}
-              disabled={!preflightReady}
-              className="rounded-sm bg-accent-blue px-6 py-1.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:opacity-90 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-40"
+              className={`rounded-sm px-6 py-1.5 text-sm font-medium shadow-sm transition-all duration-200 active:scale-[0.96] ${
+                preflightReady
+                  ? 'bg-accent-blue text-white hover:opacity-90'
+                  : 'border border-border-subtle bg-bg-surface text-text-secondary hover:bg-bg-hover'
+              }`}
             >
-              {t.getStarted}
+              {preflightReady ? t.getStarted : t.onboardingContinueAnyway}
             </button>
           )}
         </div>
