@@ -114,9 +114,25 @@ async function getDeviceSnapshot(adb: AdbService, engine: GnirehtetService): Pro
   }
 
   const activeDeviceIds = await engine.syncStatusWithDeviceState(snapshot.devices)
+  const devicesWithTunnelState = applyDeviceTunnelStates(
+    snapshot.devices,
+    engine.getStatus(),
+    activeDeviceIds
+  )
+  const traffic = new Map(
+    await Promise.all(
+      devicesWithTunnelState
+        .filter((device) => device.tunnelStatus === 'connected')
+        .map(async (device) => [device.id, await adb.getTunnelTraffic(device.id)] as const)
+    )
+  )
+
   return {
     ...snapshot,
-    devices: applyDeviceTunnelStates(snapshot.devices, engine.getStatus(), activeDeviceIds)
+    devices: devicesWithTunnelState.map((device) => ({
+      ...device,
+      traffic: traffic.get(device.id)
+    }))
   }
 }
 
