@@ -27,6 +27,10 @@ interface IpcDependencies {
 
 const ALLOWED_EXTERNAL_HOSTS = new Set(['fast.com', 'github.com'])
 
+function selectedDns(settings: AppSettings): string {
+  return settings.dns === 'custom' ? settings.customDns : settings.dns
+}
+
 function readString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
 }
@@ -154,6 +158,21 @@ export function registerIpcHandlers({
   ipcMain.handle('gnirehtet:stop', (event) => {
     trusted(event)
     return gnirehtetService.stop()
+  })
+
+  ipcMain.handle('gnirehtet:device-start', (event, deviceId: unknown) => {
+    trusted(event)
+    const settings = loadSettings()
+    return gnirehtetService.startDevice(
+      readString(deviceId),
+      selectedDns(settings),
+      settings.port
+    )
+  })
+
+  ipcMain.handle('gnirehtet:device-stop', (event, deviceId: unknown) => {
+    trusted(event)
+    return gnirehtetService.stopDevice(readString(deviceId))
   })
 
   ipcMain.handle('gnirehtet:status', (event) => {
