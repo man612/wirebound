@@ -7,6 +7,8 @@ import type { AdbService } from './adbService'
 
 type LogSender = (message: string, type?: LogEntry['type']) => void
 type StatusSender = (status: ConnectionStatus) => void
+type ProcessSpawner = typeof spawn
+type FileExists = (path: string) => boolean
 
 export function normalizeDns(value: string): string {
   const dns = value.trim()
@@ -32,7 +34,9 @@ export class GnirehtetService {
     private readonly paths: RuntimePaths,
     private readonly adbService: AdbService,
     private readonly sendLog: LogSender,
-    private readonly sendStatus: StatusSender
+    private readonly sendStatus: StatusSender,
+    private readonly spawnProcess: ProcessSpawner = spawn,
+    private readonly fileExists: FileExists = existsSync
   ) {}
 
   public getStatus(): ConnectionStatus {
@@ -46,7 +50,7 @@ export class GnirehtetService {
       return { success: true }
     }
 
-    if (!existsSync(this.paths.gnirehtetExe)) {
+    if (!this.fileExists(this.paths.gnirehtetExe)) {
       return this.fail(`Gnirehtet runtime not found: ${this.paths.gnirehtetExe}`)
     }
 
@@ -60,7 +64,7 @@ export class GnirehtetService {
 
     try {
       await this.adbService.ensureServerReady()
-      const childProcess = spawn(this.paths.gnirehtetExe, ['autorun', '-d', dns, '-p', port], {
+      const childProcess = this.spawnProcess(this.paths.gnirehtetExe, ['autorun', '-d', dns, '-p', port], {
         cwd: this.paths.gnirehtetDir,
         env: {
           ...process.env,
