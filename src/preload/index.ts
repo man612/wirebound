@@ -10,6 +10,7 @@ const api: GnirehtetAPI = {
   saveSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getDiagnostics: () => ipcRenderer.invoke('app:diagnostics'),
+  exportSupportReport: (content: string) => ipcRenderer.invoke('app:export-support-report', content),
   testSpeedOnDevice: (deviceId: string) => ipcRenderer.invoke('adb:testSpeed', deviceId),
   openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
   windowControl: (action: 'minimize' | 'maximize' | 'close') =>
