@@ -10,6 +10,7 @@ export interface RuntimePaths {
   adbDir: string
   adbExe: string
   icon: string
+  trayIcon: string
 }
 
 const ADB_RUNTIME_FILES = ['adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'] as const
@@ -73,6 +74,13 @@ export function getRuntimePaths(): RuntimePaths {
     join(root, 'bin', 'platform-tools')
   )
   const adbDir = prepareAdbCache(bundledAdbDir)
+  const trayIcon = firstExisting(
+    rootCandidates.flatMap((candidate) => [
+      join(candidate, 'icon.ico'),
+      join(candidate, 'build', 'icon.ico')
+    ]),
+    join(root, 'icon.ico')
+  )
   const icon = firstExisting(
     rootCandidates.flatMap((candidate) => [
       join(candidate, 'icon.png'),
@@ -90,6 +98,7 @@ export function getRuntimePaths(): RuntimePaths {
     gnirehtetExe: join(gnirehtetDir, 'gnirehtet.exe'),
     adbDir,
     adbExe: join(adbDir, 'adb.exe'),
-    icon
+    icon,
+    trayIcon
   }
 }

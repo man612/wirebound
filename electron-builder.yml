@@ -14,6 +14,8 @@ extraResources:
     to: bin/platform-tools
   - from: src/renderer/src/assets/icon.png
     to: icon.png
+  - from: build/icon.ico
+    to: icon.ico
 
 files:
   - '!**/.vscode/*'
