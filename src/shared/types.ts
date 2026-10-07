@@ -29,6 +29,7 @@ export interface AppSettings {
   dns: string
   port: string
   autoStart: boolean
+  launchAtLogin: boolean
   customDns: string
   theme: 'light' | 'dark'
   language: 'en' | 'id'
