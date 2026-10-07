@@ -36,6 +36,7 @@ export function normalizeSettings(value: unknown): AppSettings {
     port: normalizePort(input.port),
     autoStart: readBoolean(input.autoStart, DEFAULT_SETTINGS.autoStart),
     launchAtLogin: readBoolean(input.launchAtLogin, DEFAULT_SETTINGS.launchAtLogin),
+    telemetryEnabled: readBoolean(input.telemetryEnabled, DEFAULT_SETTINGS.telemetryEnabled),
     customDns: readString(input.customDns, DEFAULT_SETTINGS.customDns),
     theme,
     language,
