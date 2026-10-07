@@ -92,12 +92,17 @@ export function classifyDeviceAccess(devices: AdbDevice[]): DiagnosticStatus {
   return 'warning'
 }
 
+type AdbExecutor = (args: string[], timeout: number) => Promise<string>
+
 export class AdbService {
   private readonly detailsCache = new Map<string, CachedDeviceDetails>()
   private serverReadyPromise: Promise<void> | null = null
   private serverReadyAt = 0
 
-  public constructor(private readonly paths: RuntimePaths) {}
+  public constructor(
+    private readonly paths: RuntimePaths,
+    private readonly executor?: AdbExecutor
+  ) {}
 
   private adbEnv(): NodeJS.ProcessEnv {
     return {
@@ -129,7 +134,7 @@ export class AdbService {
   }
 
   private execAdb(args: string[], timeout = 5000): Promise<string> {
-    return this.runAdb(args, timeout)
+    return this.executor ? this.executor(args, timeout) : this.runAdb(args, timeout)
   }
 
   public async ensureServerReady(): Promise<void> {
