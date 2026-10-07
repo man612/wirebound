@@ -68,6 +68,8 @@ Wirebound uses the standard local ADB server on port **5037** so it can share th
 
 If Wirebound reports `Unauthorized`, `Offline`, `No access`, or `ADB unavailable`, resolve that state before troubleshooting the relay itself. The **Run Diagnostics** action provides a copyable support report without exposing the full device serial.
 
+For a step-by-step guide covering USB cables, USB debugging authorization, Windows OEM drivers, ADB states, VPN permission, and multi-device troubleshooting, see [ADB and First-Connection Troubleshooting](./docs/ADB_TROUBLESHOOTING.md).
+
 ## Development
 
 Requirements: Windows, Node.js 24+, npm, PowerShell, and Git.
