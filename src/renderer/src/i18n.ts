@@ -136,7 +136,15 @@ export const translations = {
     about: 'About Wirebound',
     developer: 'Developer',
     githubRepo: 'GitHub',
-    creditsDesc: 'A Windows desktop GUI for Gnirehtet reverse tethering.'
+    creditsDesc: 'A Windows desktop GUI for Gnirehtet reverse tethering.',
+    updates: 'Updates',
+    updateCheckDesc: 'Check the latest stable Wirebound release on GitHub.',
+    checkForUpdates: 'Check for Updates',
+    checkingUpdates: 'Checking...',
+    updateAvailable: 'Update available:',
+    upToDate: 'Wirebound is up to date',
+    updateCheckFailed: 'Could not check for updates',
+    viewRelease: 'View Release'
   },
   id: {
     welcome: 'Selamat Datang di Wirebound',
@@ -273,7 +281,15 @@ export const translations = {
     about: 'Tentang Wirebound',
     developer: 'Pengembang',
     githubRepo: 'GitHub',
-    creditsDesc: 'GUI desktop Windows untuk reverse tethering Gnirehtet.'
+    creditsDesc: 'GUI desktop Windows untuk reverse tethering Gnirehtet.',
+    updates: 'Pembaruan',
+    updateCheckDesc: 'Periksa rilis stabil Wirebound terbaru di GitHub.',
+    checkForUpdates: 'Periksa Pembaruan',
+    checkingUpdates: 'Memeriksa...',
+    updateAvailable: 'Pembaruan tersedia:',
+    upToDate: 'Wirebound sudah versi terbaru',
+    updateCheckFailed: 'Tidak bisa memeriksa pembaruan',
+    viewRelease: 'Lihat Rilis'
   }
 }
 

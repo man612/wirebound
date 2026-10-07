@@ -44,6 +44,29 @@ jobs:
 
       - name: Build Windows installer
         run: npm run build:win
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      - name: Verify Windows code signature when configured
+        shell: pwsh
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+        run: |
+          $installer = Get-ChildItem 'dist\*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'No Windows installer was produced.' }
+
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_LINK)) {
+            Write-Warning 'WIN_CSC_LINK is not configured; this release will remain unsigned.'
+            exit 0
+          }
+
+          $signature = Get-AuthenticodeSignature $installer.FullName
+          if ($signature.Status -ne 'Valid') {
+            throw "Installer signature verification failed: $($signature.Status) - $($signature.StatusMessage)"
+          }
+
+          Write-Host "Verified Authenticode signature from $($signature.SignerCertificate.Subject)"
 
       - name: Generate release checksums
         shell: pwsh

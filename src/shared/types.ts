@@ -25,6 +25,13 @@ export interface SaveReportResult extends ActionResult {
   filePath?: string
 }
 
+export interface UpdateCheckResult extends ActionResult {
+  currentVersion: string
+  latestVersion?: string
+  updateAvailable?: boolean
+  releaseUrl?: string
+}
+
 export interface AppSettings {
   dns: string
   port: string
@@ -93,6 +100,7 @@ export interface GnirehtetAPI {
   getAppVersion: () => Promise<string>
   getDiagnostics: () => Promise<DiagnosticReport>
   exportSupportReport: (content: string) => Promise<SaveReportResult>
+  checkForUpdates: () => Promise<UpdateCheckResult>
   testSpeedOnDevice: (deviceId: string) => Promise<ActionResult>
   openExternal: (url: string) => Promise<ActionResult>
   windowControl: (action: 'minimize' | 'maximize' | 'close') => void
