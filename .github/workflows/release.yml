@@ -47,6 +47,7 @@ jobs:
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIREBOUND_CRASH_REPORT_URL: ${{ vars.WIREBOUND_CRASH_REPORT_URL }}
 
       - name: Verify Windows code signature when configured
         shell: pwsh
