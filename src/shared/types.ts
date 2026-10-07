@@ -1,11 +1,18 @@
 export type DeviceTunnelStatus = 'idle' | 'waiting' | 'connected' | 'error' | 'unavailable'
 
+export interface DeviceTraffic {
+  interfaceName: string
+  rxBytes: number
+  txBytes: number
+}
+
 export interface AdbDevice {
   id: string
   name: string
   battery?: string
   status: 'device' | 'offline' | 'unauthorized' | 'no permissions'
   tunnelStatus?: DeviceTunnelStatus
+  traffic?: DeviceTraffic
 }
 
 export interface AdbSnapshot {

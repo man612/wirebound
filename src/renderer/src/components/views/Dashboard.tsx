@@ -84,6 +84,22 @@ function getTunnelStatusClass(status: DeviceTunnelStatus | undefined): string {
   return 'border-border-subtle bg-bg-primary text-text-muted'
 }
 
+function formatBytes(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value) || value < 0) return '--'
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let amount = value
+  let unitIndex = 0
+
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024
+    unitIndex += 1
+  }
+
+  const digits = amount >= 100 || unitIndex === 0 ? 0 : amount >= 10 ? 1 : 2
+  return `${amount.toFixed(digits)} ${units[unitIndex]}`
+}
+
 function getDeviceSetupState(
   devices: AdbDevice[],
   status: ConnectionStatus,
@@ -506,7 +522,7 @@ export default function Dashboard({
           </div>
 
           <div className="overflow-x-auto rounded-sm border border-border-subtle bg-bg-surface theme-transition">
-            <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+            <table className="w-full min-w-[920px] border-collapse text-left text-xs">
               <thead className="border-b border-border-subtle bg-bg-primary">
                 <tr>
                   <th className="w-28 px-3 py-2 font-semibold text-text-muted">{t.deviceStatus}</th>
@@ -514,6 +530,7 @@ export default function Dashboard({
                   <th className="px-3 py-2 font-semibold text-text-muted">{t.deviceId}</th>
                   <th className="px-3 py-2 font-semibold text-text-muted">{t.model}</th>
                   <th className="w-24 px-3 py-2 font-semibold text-text-muted">{t.power}</th>
+                  <th className="w-40 px-3 py-2 font-semibold text-text-muted">{t.traffic}</th>
                   <th className="w-56 px-3 py-2 text-right font-semibold text-text-muted">
                     {t.actions}
                   </th>
@@ -574,6 +591,23 @@ export default function Dashboard({
                       <div className="flex items-center gap-1 text-text-muted">
                         <Battery size={12} />
                         {device.battery ? `${device.battery}%` : '--'}
+                      </div>
+                    </td>
+                    <td
+                      className="px-3 py-1.5 font-mono text-[10px] text-text-secondary"
+                      title={
+                        device.traffic
+                          ? `${device.traffic.interfaceName} kernel counters`
+                          : t.trafficUnavailable
+                      }
+                    >
+                      <div className="whitespace-nowrap">
+                        <span className="text-text-muted">RX</span>{' '}
+                        {formatBytes(device.traffic?.rxBytes)}
+                      </div>
+                      <div className="whitespace-nowrap">
+                        <span className="text-text-muted">TX</span>{' '}
+                        {formatBytes(device.traffic?.txBytes)}
                       </div>
                     </td>
                     <td className="px-3 py-1.5 text-right">

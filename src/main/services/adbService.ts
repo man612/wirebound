@@ -10,7 +10,8 @@ import type {
   DiagnosticCheck,
   DiagnosticDevice,
   DiagnosticReport,
-  DiagnosticStatus
+  DiagnosticStatus,
+  DeviceTraffic
 } from '../../shared/types'
 
 const GNIREHTET_PACKAGE = 'com.genymobile.gnirehtet'
@@ -74,6 +75,34 @@ export function parseAdbDevices(stdout: string): AdbDevice[] {
 
 export function parseBatteryLevel(output: string): string | undefined {
   return output.match(/level:\s*(\d+)/i)?.[1]
+}
+
+export function parseTunnelTraffic(output: string): DeviceTraffic | undefined {
+  const candidates: DeviceTraffic[] = []
+
+  for (const line of output.split(/\r?\n/)) {
+    const match = line.match(/^\s*([^:\s]+):\s+(.+)$/)
+    if (!match || !/^tun\d*$/i.test(match[1])) continue
+
+    const columns = match[2].trim().split(/\s+/)
+    if (columns.length < 16) continue
+
+    const rxBytes = Number(columns[0])
+    const txBytes = Number(columns[8])
+    if (!Number.isFinite(rxBytes) || !Number.isFinite(txBytes) || rxBytes < 0 || txBytes < 0) {
+      continue
+    }
+
+    candidates.push({
+      interfaceName: match[1],
+      rxBytes,
+      txBytes
+    })
+  }
+
+  return candidates.sort(
+    (left, right) => right.rxBytes + right.txBytes - (left.rxBytes + left.txBytes)
+  )[0]
 }
 
 export function maskDeviceId(deviceId: string): string {
@@ -317,6 +346,18 @@ export class AdbService {
     })
 
     return { generatedAt: new Date().toISOString(), engineStatus, checks, devices }
+  }
+
+  public async getTunnelTraffic(deviceId: string): Promise<DeviceTraffic | undefined> {
+    try {
+      const output = await this.execAdb(
+        ['-s', deviceId, 'shell', 'cat', '/proc/net/dev'],
+        3000
+      )
+      return parseTunnelTraffic(output)
+    } catch {
+      return undefined
+    }
   }
 
   public async openSpeedTest(deviceId: string): Promise<ActionResult> {
