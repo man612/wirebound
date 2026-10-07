@@ -132,6 +132,11 @@ export const translations = {
     model: 'Model',
     power: 'Power',
     actions: 'Actions',
+    disconnectDevice: 'Disconnect',
+    retryDevice: 'Retry',
+    deviceActionWorking: 'Working...',
+    multiDeviceControlNote:
+      'Per-device disconnect stays in effect while the device remains attached. Autorun may start it again after the device reconnects.',
 
     about: 'About Wirebound',
     developer: 'Developer',
@@ -277,6 +282,11 @@ export const translations = {
     model: 'Model',
     power: 'Daya',
     actions: 'Aksi',
+    disconnectDevice: 'Putuskan',
+    retryDevice: 'Coba Lagi',
+    deviceActionWorking: 'Memproses...',
+    multiDeviceControlNote:
+      'Putus per perangkat tetap berlaku selama HP masih terpasang. Autorun dapat menyalakannya lagi setelah HP dicabut lalu disambungkan kembali.',
 
     about: 'Tentang Wirebound',
     developer: 'Pengembang',
