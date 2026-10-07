@@ -4,7 +4,13 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  main: {},
+  main: {
+    define: {
+      __WIREBOUND_CRASH_REPORT_URL__: JSON.stringify(
+        process.env.WIREBOUND_CRASH_REPORT_URL?.trim() ?? ''
+      )
+    }
+  },
   preload: {},
   renderer: {
     resolve: {
