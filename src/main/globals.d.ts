@@ -1,0 +1,1 @@
+declare const __WIREBOUND_CRASH_REPORT_URL__: string
