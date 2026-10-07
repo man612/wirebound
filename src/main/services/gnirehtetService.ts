@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { existsSync } from 'fs'
 import { isIP } from 'net'
 import type { RuntimePaths } from '../appPaths'
@@ -9,6 +9,9 @@ type LogSender = (message: string, type?: LogEntry['type']) => void
 type StatusSender = (status: ConnectionStatus) => void
 type ProcessSpawner = typeof spawn
 type FileExists = (path: string) => boolean
+type DeviceCommandRunner = (args: string[], timeout: number) => Promise<string>
+
+const DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]+$/
 
 export function normalizeDns(value: string): string {
   const dns = value.trim()
@@ -36,7 +39,8 @@ export class GnirehtetService {
     private readonly sendLog: LogSender,
     private readonly sendStatus: StatusSender,
     private readonly spawnProcess: ProcessSpawner = spawn,
-    private readonly fileExists: FileExists = existsSync
+    private readonly fileExists: FileExists = existsSync,
+    private readonly deviceCommandRunner?: DeviceCommandRunner
   ) {}
 
   public getStatus(): ConnectionStatus {
@@ -79,6 +83,52 @@ export class GnirehtetService {
     } catch (error) {
       this.childProcess = null
       return this.fail(readError(error, 'Failed to start Gnirehtet.'))
+    }
+  }
+
+  public async startDevice(
+    deviceId: string,
+    dnsInput: string,
+    portInput: string
+  ): Promise<ActionResult> {
+    if (!this.childProcess) {
+      return { success: false, error: 'Start the Wirebound engine before connecting one device.' }
+    }
+    if (!this.isValidDeviceId(deviceId)) {
+      return { success: false, error: 'Device id is invalid.' }
+    }
+
+    const dns = normalizeDns(dnsInput)
+    const port = normalizePort(portInput)
+
+    try {
+      await this.adbService.ensureServerReady()
+      await this.runDeviceCommand(['start', deviceId, '-d', dns, '-p', port], 10_000)
+      this.sendLog('Requested tethering start for the selected Android device.', 'info')
+      await this.syncStatusWithDeviceState()
+      return { success: true }
+    } catch (error) {
+      const message = readError(error, 'Failed to start tethering on the selected device.')
+      this.sendLog(message, 'stderr')
+      return { success: false, error: message }
+    }
+  }
+
+  public async stopDevice(deviceId: string): Promise<ActionResult> {
+    if (!this.isValidDeviceId(deviceId)) {
+      return { success: false, error: 'Device id is invalid.' }
+    }
+
+    try {
+      await this.adbService.ensureServerReady()
+      await this.runDeviceCommand(['stop', deviceId], 10_000)
+      this.sendLog('Stopped tethering on the selected Android device.', 'info')
+      await this.syncStatusWithDeviceState()
+      return { success: true }
+    } catch (error) {
+      const message = readError(error, 'Failed to stop tethering on the selected device.')
+      this.sendLog(message, 'stderr')
+      return { success: false, error: message }
     }
   }
 
@@ -150,6 +200,45 @@ export class GnirehtetService {
       this.reportAdbUnavailable(readError(error, 'Unable to query Gnirehtet client state.'))
       return new Set()
     }
+  }
+
+  private isValidDeviceId(deviceId: string): boolean {
+    const value = deviceId.trim()
+    return value.length > 0 && value.length <= 255 && !value.startsWith('-') && DEVICE_ID_PATTERN.test(value)
+  }
+
+  private runDeviceCommand(args: string[], timeout: number): Promise<string> {
+    if (this.deviceCommandRunner) {
+      return this.deviceCommandRunner(args, timeout)
+    }
+
+    if (!this.fileExists(this.paths.gnirehtetExe)) {
+      return Promise.reject(new Error(`Gnirehtet runtime not found: ${this.paths.gnirehtetExe}`))
+    }
+
+    return new Promise((resolve, reject) => {
+      execFile(
+        this.paths.gnirehtetExe,
+        args,
+        {
+          cwd: this.paths.gnirehtetDir,
+          env: {
+            ...process.env,
+            PATH: `${this.paths.adbDir};${process.env.PATH ?? ''}`
+          },
+          timeout,
+          windowsHide: true,
+          encoding: 'utf8'
+        },
+        (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr.trim() || error.message))
+            return
+          }
+          resolve(stdout)
+        }
+      )
+    })
   }
 
   private attachProcessEvents(childProcess: ChildProcessWithoutNullStreams): void {

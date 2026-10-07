@@ -93,6 +93,8 @@ export interface DiagnosticReport {
 export interface GnirehtetAPI {
   startGnirehtet: (dns: string, port: string) => Promise<ActionResult>
   stopGnirehtet: () => Promise<ActionResult>
+  startDeviceTunnel: (deviceId: string) => Promise<ActionResult>
+  stopDeviceTunnel: (deviceId: string) => Promise<ActionResult>
   getStatus: () => Promise<ConnectionStatus>
   getDeviceSnapshot: () => Promise<AdbSnapshot>
   getSettings: () => Promise<AppSettings>

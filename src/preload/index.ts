@@ -4,6 +4,8 @@ import type { GnirehtetAPI } from '../shared/types'
 const api: GnirehtetAPI = {
   startGnirehtet: (dns: string, port: string) => ipcRenderer.invoke('gnirehtet:start', dns, port),
   stopGnirehtet: () => ipcRenderer.invoke('gnirehtet:stop'),
+  startDeviceTunnel: (deviceId: string) => ipcRenderer.invoke('gnirehtet:device-start', deviceId),
+  stopDeviceTunnel: (deviceId: string) => ipcRenderer.invoke('gnirehtet:device-stop', deviceId),
   getStatus: () => ipcRenderer.invoke('gnirehtet:status'),
   getDeviceSnapshot: () => ipcRenderer.invoke('adb:snapshot'),
   getSettings: () => ipcRenderer.invoke('settings:get'),

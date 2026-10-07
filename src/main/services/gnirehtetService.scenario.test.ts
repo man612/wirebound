@@ -98,6 +98,55 @@ describe('GnirehtetService lifecycle scenarios', () => {
     expect(service.getStatus()).toBe('connecting')
   })
 
+  it('targets one attached device with explicit Gnirehtet start and stop commands', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const commandRunner = vi.fn().mockResolvedValue('')
+    const { adb } = createAdbDouble()
+    const service = new GnirehtetService(
+      paths,
+      adb,
+      vi.fn(),
+      vi.fn(),
+      spawnProcess,
+      () => true,
+      commandRunner
+    )
+
+    await service.start('8.8.8.8', '31416')
+    await expect(service.startDevice('ABC123', '1.1.1.1', '4242')).resolves.toEqual({
+      success: true
+    })
+    await expect(service.stopDevice('ABC123')).resolves.toEqual({ success: true })
+
+    expect(commandRunner).toHaveBeenNthCalledWith(
+      1,
+      ['start', 'ABC123', '-d', '1.1.1.1', '-p', '4242'],
+      10_000
+    )
+    expect(commandRunner).toHaveBeenNthCalledWith(2, ['stop', 'ABC123'], 10_000)
+  })
+
+  it('rejects unsafe device identifiers before invoking Gnirehtet', async () => {
+    const commandRunner = vi.fn().mockResolvedValue('')
+    const { adb } = createAdbDouble()
+    const service = new GnirehtetService(
+      paths,
+      adb,
+      vi.fn(),
+      vi.fn(),
+      vi.fn() as unknown as typeof import('child_process').spawn,
+      () => true,
+      commandRunner
+    )
+
+    await expect(service.stopDevice('--help')).resolves.toEqual({
+      success: false,
+      error: 'Device id is invalid.'
+    })
+    expect(commandRunner).not.toHaveBeenCalled()
+  })
+
   it('stops the relay, cleans Android clients, and returns to disconnected', async () => {
     const child = createFakeProcess()
     const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn

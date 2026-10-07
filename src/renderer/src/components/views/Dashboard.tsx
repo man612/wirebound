@@ -6,12 +6,14 @@ import {
   ClipboardCopy,
   Download,
   Laptop,
+  Link2,
   Play,
   RefreshCw,
   ShieldAlert,
   Square as StopSquare,
   Stethoscope,
   Terminal,
+  Unplug,
   Usb,
   Zap
 } from 'lucide-react'
@@ -219,6 +221,7 @@ export default function Dashboard({
   const logEndRef = useRef<HTMLDivElement>(null)
   const [reportCopied, setReportCopied] = useState(false)
   const [reportExported, setReportExported] = useState(false)
+  const [deviceActionId, setDeviceActionId] = useState<string>()
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -252,6 +255,22 @@ export default function Dashboard({
 
   const handleOpenDesktopSpeedTest = (): void => {
     void window.api.openExternal('https://fast.com')
+  }
+
+  const handleDeviceTunnelAction = async (device: AdbDevice): Promise<void> => {
+    setDeviceActionId(device.id)
+    try {
+      const result =
+        device.tunnelStatus === 'connected'
+          ? await window.api.stopDeviceTunnel(device.id)
+          : await window.api.startDeviceTunnel(device.id)
+
+      if (!result.success) {
+        console.warn('Per-device tethering action failed.', result.error)
+      }
+    } finally {
+      setDeviceActionId(undefined)
+    }
   }
 
   const handleOpenDeviceSpeedTest = (deviceId: string): void => {
@@ -473,9 +492,16 @@ export default function Dashboard({
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-              {t.devicesLabel} ({devices.length})
+          <div className="mb-2 flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                {t.devicesLabel} ({devices.length})
+              </div>
+              {devices.length > 1 && (
+                <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-text-muted">
+                  {t.multiDeviceControlNote}
+                </p>
+              )}
             </div>
           </div>
 
@@ -488,7 +514,7 @@ export default function Dashboard({
                   <th className="px-3 py-2 font-semibold text-text-muted">{t.deviceId}</th>
                   <th className="px-3 py-2 font-semibold text-text-muted">{t.model}</th>
                   <th className="w-24 px-3 py-2 font-semibold text-text-muted">{t.power}</th>
-                  <th className="w-32 px-3 py-2 text-right font-semibold text-text-muted">
+                  <th className="w-56 px-3 py-2 text-right font-semibold text-text-muted">
                     {t.actions}
                   </th>
                 </tr>
@@ -551,17 +577,43 @@ export default function Dashboard({
                       </div>
                     </td>
                     <td className="px-3 py-1.5 text-right">
-                      <button
-                        onClick={() => handleOpenDeviceSpeedTest(device.id)}
-                        disabled={device.tunnelStatus !== 'connected'}
-                        className="group/btn inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-all hover:border-accent-blue/50 hover:bg-accent-blue/10 hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Zap
-                          size={12}
-                          className="text-text-muted transition-transform group-hover/btn:scale-110"
-                        />
-                        {t.testDeviceSpeed}
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => void handleDeviceTunnelAction(device)}
+                          disabled={
+                            device.status !== 'device' ||
+                            (!isRunning && !isConnecting) ||
+                            deviceActionId === device.id
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[10px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
+                            device.tunnelStatus === 'connected'
+                              ? 'border-accent-red/30 bg-accent-red-dim/20 text-accent-red hover:bg-accent-red-dim/40'
+                              : 'border-accent-blue/30 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/15'
+                          }`}
+                        >
+                          {device.tunnelStatus === 'connected' ? (
+                            <Unplug size={12} />
+                          ) : (
+                            <Link2 size={12} />
+                          )}
+                          {deviceActionId === device.id
+                            ? t.deviceActionWorking
+                            : device.tunnelStatus === 'connected'
+                              ? t.disconnectDevice
+                              : t.retryDevice}
+                        </button>
+                        <button
+                          onClick={() => handleOpenDeviceSpeedTest(device.id)}
+                          disabled={device.tunnelStatus !== 'connected'}
+                          className="group/btn inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-all hover:border-accent-blue/50 hover:bg-accent-blue/10 hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Zap
+                            size={12}
+                            className="text-text-muted transition-transform group-hover/btn:scale-110"
+                          />
+                          {t.testDeviceSpeed}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
