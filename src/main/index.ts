@@ -9,6 +9,7 @@ import { AdbService } from './services/adbService'
 import { GnirehtetService } from './services/gnirehtetService'
 import { applyDeviceTunnelStates } from './deviceState'
 import { getDevicePollInterval } from './polling'
+import { applyCrashUploadConsent, initializeCrashReporting } from './services/telemetryService'
 import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
 
 
@@ -22,6 +23,8 @@ let gnirehtetService: GnirehtetService | null = null
 let handlersRegistered = false
 let shutdownStarted = false
 let shutdownComplete = false
+
+initializeCrashReporting()
 
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
@@ -184,6 +187,7 @@ function ensureServices(): { paths: RuntimePaths; adb: AdbService; engine: Gnire
 async function bootstrap(): Promise<void> {
   const { paths, adb, engine } = ensureServices()
   const settings = loadSettings()
+  applyCrashUploadConsent(settings.telemetryEnabled)
 
   mainWindow = createMainWindow(paths)
   mainWindow.on('close', (event) => {
@@ -203,7 +207,10 @@ async function bootstrap(): Promise<void> {
       getDeviceSnapshot: () => getDeviceSnapshot(adb, engine),
       getMainWindow: () => mainWindow,
       hideToTray: hideMainWindowToTray,
-      onSettingsChanged: refreshTrayMenu
+      onSettingsChanged: (settings) => {
+        refreshTrayMenu()
+        applyCrashUploadConsent(settings.telemetryEnabled)
+      }
     })
     handlersRegistered = true
   }

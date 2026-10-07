@@ -111,6 +111,11 @@ export const translations = {
     autoStartDesc: 'Start the tethering engine when Wirebound opens',
     launchAtLoginLabel: 'Launch Wirebound at Windows login',
     launchAtLoginDesc: 'Open the app automatically after you sign in to Windows',
+    crashReportsLabel: 'Share crash reports',
+    crashReportsDesc:
+      'Send crash minidumps only after a crash. No Android serials, terminal logs, or support reports are added by Wirebound.',
+    crashReportsUnavailable:
+      'Remote crash reporting is not configured in this build. Crash dumps stay local.',
     themeLabel: 'Color Theme',
     themeDesc: 'Interface appearance',
     langLabel: 'Display Language',
@@ -263,6 +268,11 @@ export const translations = {
     autoStartDesc: 'Jalankan mesin tethering saat Wirebound dibuka',
     launchAtLoginLabel: 'Buka Wirebound saat login Windows',
     launchAtLoginDesc: 'Buka aplikasi otomatis setelah kamu masuk ke Windows',
+    crashReportsLabel: 'Kirim laporan crash',
+    crashReportsDesc:
+      'Kirim minidump hanya setelah aplikasi crash. Wirebound tidak menambahkan serial Android, log terminal, atau support report.',
+    crashReportsUnavailable:
+      'Server laporan crash belum dikonfigurasi pada build ini. Crash dump tetap tersimpan lokal.',
     themeLabel: 'Tema Warna',
     themeDesc: 'Tampilan antarmuka',
     langLabel: 'Bahasa Tampilan',

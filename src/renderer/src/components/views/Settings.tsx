@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ExternalLink, Moon, RefreshCw, Sun } from 'lucide-react'
 import CustomSelect from '../ui/CustomSelect'
 import icon from '../../assets/icon.png'
@@ -36,6 +36,19 @@ export default function Settings({
   const [portDraft, setPortDraft] = useState(settings.port)
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | undefined>()
   const [checkingUpdates, setCheckingUpdates] = useState(false)
+  const [crashTelemetryAvailable, setCrashTelemetryAvailable] = useState(false)
+
+  useEffect(() => {
+    let active = true
+
+    void window.api.getCrashTelemetryState().then((state) => {
+      if (active) setCrashTelemetryAvailable(state.available)
+    })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const customDnsInvalid = useMemo(
     () =>
@@ -224,6 +237,31 @@ export default function Settings({
                   type="checkbox"
                   checked={settings.launchAtLogin}
                   onChange={(event) => update({ launchAtLogin: event.target.checked })}
+                  className="peer sr-only"
+                />
+                <div className="peer h-4 w-8 rounded-sm bg-bg-hover shadow-inner after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3.5 after:rounded-sm after:bg-white after:content-[''] after:transition-all peer-checked:bg-accent-blue peer-checked:after:translate-x-full" />
+              </label>
+            </div>
+
+            <div className="group flex items-center justify-between gap-6 border-t border-border-subtle pt-4">
+              <div>
+                <div className="text-text-primary transition-colors group-hover:text-accent-blue">
+                  {t.crashReportsLabel}
+                </div>
+                <div className="max-w-lg text-xs text-text-muted">
+                  {crashTelemetryAvailable ? t.crashReportsDesc : t.crashReportsUnavailable}
+                </div>
+              </div>
+              <label
+                className={`relative inline-flex items-center transition-transform ${
+                  crashTelemetryAvailable ? 'cursor-pointer active:scale-95' : 'cursor-not-allowed opacity-50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={settings.telemetryEnabled && crashTelemetryAvailable}
+                  disabled={!crashTelemetryAvailable}
+                  onChange={(event) => update({ telemetryEnabled: event.target.checked })}
                   className="peer sr-only"
                 />
                 <div className="peer h-4 w-8 rounded-sm bg-bg-hover shadow-inner after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3.5 after:rounded-sm after:bg-white after:content-[''] after:transition-all peer-checked:bg-accent-blue peer-checked:after:translate-x-full" />
