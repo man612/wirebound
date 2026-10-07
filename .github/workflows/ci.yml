@@ -44,3 +44,22 @@ jobs:
 
       - name: Package smoke test
         run: npx electron-builder --win --dir
+
+      - name: Report packaged size and locale set
+        shell: pwsh
+        run: |
+          $root = 'dist\win-unpacked'
+          if (-not (Test-Path $root)) { throw 'Packaged app directory was not produced.' }
+
+          $bytes = (Get-ChildItem $root -Recurse -File | Measure-Object Length -Sum).Sum
+          $sizeMb = [math]::Round($bytes / 1MB, 2)
+          $locales = Get-ChildItem (Join-Path $root 'locales') -Filter '*.pak' | Select-Object -ExpandProperty Name
+
+          "### Windows package footprint" >> $env:GITHUB_STEP_SUMMARY
+          "- Unpacked size: **$sizeMb MB**" >> $env:GITHUB_STEP_SUMMARY
+          "- Electron locales: **$($locales -join ', ')**" >> $env:GITHUB_STEP_SUMMARY
+
+          $unexpected = $locales | Where-Object { $_ -notin @('en-US.pak', 'id.pak') }
+          if ($unexpected) {
+            throw "Unexpected Electron locales were packaged: $($unexpected -join ', ')"
+          }
