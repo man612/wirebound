@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu, Tray } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { getRuntimePaths } from './appPaths'
 import type { RuntimePaths } from './appPaths'
@@ -13,6 +13,8 @@ import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../sh
 const DEVICE_POLL_INTERVAL_MS = 4000
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let trayHintShown = false
 let devicePoller: NodeJS.Timeout | null = null
 let runtimePaths: RuntimePaths | null = null
 let adbService: AdbService | null = null
@@ -20,6 +22,72 @@ let gnirehtetService: GnirehtetService | null = null
 let handlersRegistered = false
 let shutdownStarted = false
 let shutdownComplete = false
+
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function hideMainWindowToTray(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.hide()
+
+  if (!tray || trayHintShown) return
+
+  const indonesian = loadSettings().language === 'id'
+  tray.displayBalloon({
+    title: 'Wirebound',
+    content: indonesian
+      ? 'Wirebound masih berjalan di tray. Gunakan menu tray untuk membuka kembali atau keluar.'
+      : 'Wirebound is still running in the tray. Use the tray menu to reopen or quit.',
+    noSound: true,
+    respectQuietTime: true
+  })
+  trayHintShown = true
+}
+
+function refreshTrayMenu(): void {
+  if (!tray) return
+
+  const settings = loadSettings()
+  const indonesian = settings.language === 'id'
+  const engineStatus = gnirehtetService?.getStatus() ?? 'disconnected'
+
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: indonesian ? 'Buka Wirebound' : 'Show Wirebound',
+        click: showMainWindow
+      },
+      {
+        label: indonesian ? 'Putuskan Tethering' : 'Disconnect Tethering',
+        enabled: engineStatus !== 'disconnected',
+        click: () => {
+          void (async () => {
+            await gnirehtetService?.stop()
+            refreshTrayMenu()
+          })()
+        }
+      },
+      { type: 'separator' },
+      {
+        label: indonesian ? 'Keluar' : 'Quit',
+        click: () => void shutdown()
+      }
+    ])
+  )
+}
+
+function ensureTray(paths: RuntimePaths): void {
+  if (tray) return
+
+  tray = new Tray(paths.trayIcon)
+  tray.setToolTip('Wirebound')
+  tray.on('click', showMainWindow)
+  refreshTrayMenu()
+}
 
 function sendToRenderer(channel: string, payload: unknown): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -34,6 +102,7 @@ function sendLog(message: string, type: LogEntry['type'] = 'info'): void {
 
 function sendStatus(status: ConnectionStatus): void {
   sendToRenderer('gnirehtet:status-change', status)
+  refreshTrayMenu()
 }
 
 async function getDeviceSnapshot(adb: AdbService, engine: GnirehtetService): Promise<AdbSnapshot> {
@@ -96,16 +165,24 @@ async function bootstrap(): Promise<void> {
   const settings = loadSettings()
 
   mainWindow = createMainWindow(paths)
+  mainWindow.on('close', (event) => {
+    if (shutdownStarted) return
+    event.preventDefault()
+    hideMainWindowToTray()
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+  ensureTray(paths)
 
   if (!handlersRegistered) {
     registerIpcHandlers({
       adbService: adb,
       gnirehtetService: engine,
       getDeviceSnapshot: () => getDeviceSnapshot(adb, engine),
-      getMainWindow: () => mainWindow
+      getMainWindow: () => mainWindow,
+      hideToTray: hideMainWindowToTray,
+      onSettingsChanged: refreshTrayMenu
     })
     handlersRegistered = true
   }
@@ -149,10 +226,7 @@ if (!hasSingleInstanceLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
+    showMainWindow()
   })
 
   app.whenReady().then(() => {
@@ -165,7 +239,9 @@ if (!hasSingleInstanceLock) {
     void bootstrap()
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0 && !shutdownStarted) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        showMainWindow()
+      } else if (BrowserWindow.getAllWindows().length === 0 && !shutdownStarted) {
         void bootstrap()
       }
     })
@@ -179,6 +255,6 @@ if (!hasSingleInstanceLock) {
   })
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    // Keep the main process alive for the Windows tray. Explicit Quit runs shutdown().
   })
 }
