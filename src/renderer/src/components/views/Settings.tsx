@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Moon, Sun } from 'lucide-react'
+import { CheckCircle2, ExternalLink, Moon, RefreshCw, Sun } from 'lucide-react'
 import CustomSelect from '../ui/CustomSelect'
 import icon from '../../assets/icon.png'
-import type { AppSettings } from '../../../../shared/types'
+import type { AppSettings, UpdateCheckResult } from '../../../../shared/types'
 import type { Translation } from '../../i18n'
 
 interface SettingsProps {
@@ -34,6 +34,8 @@ export default function Settings({
 }: SettingsProps): React.JSX.Element {
   const [customDnsDraft, setCustomDnsDraft] = useState(settings.customDns)
   const [portDraft, setPortDraft] = useState(settings.port)
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | undefined>()
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
 
   const customDnsInvalid = useMemo(
     () =>
@@ -44,6 +46,21 @@ export default function Settings({
 
   const update = (delta: Partial<AppSettings>): void => {
     void updateSettings(delta)
+  }
+
+  const checkForUpdates = async (): Promise<void> => {
+    setCheckingUpdates(true)
+    try {
+      setUpdateCheck(await window.api.checkForUpdates())
+    } catch (error) {
+      setUpdateCheck({
+        success: false,
+        currentVersion: version,
+        error: error instanceof Error ? error.message : 'Update check failed.'
+      })
+    } finally {
+      setCheckingUpdates(false)
+    }
   }
 
   const commitCustomDns = (): void => {
@@ -276,6 +293,54 @@ export default function Settings({
                 </span>
               </div>
               <p className="mt-1 text-[11px] leading-tight text-text-secondary">{t.creditsDesc}</p>
+
+              <div className="mt-3 rounded-sm border border-border-subtle bg-bg-primary p-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                      {t.updates}
+                    </div>
+                    {updateCheck?.success && updateCheck.updateAvailable && updateCheck.latestVersion ? (
+                      <div className="mt-1 text-xs font-medium text-accent-blue">
+                        {t.updateAvailable} v{updateCheck.latestVersion}
+                      </div>
+                    ) : updateCheck?.success ? (
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-accent-green">
+                        <CheckCircle2 size={12} />
+                        {t.upToDate}
+                      </div>
+                    ) : updateCheck?.error ? (
+                      <div className="mt-1 max-w-md break-words text-[10px] text-accent-red">
+                        {t.updateCheckFailed}: {updateCheck.error}
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-[10px] text-text-muted">{t.updateCheckDesc}</div>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    {updateCheck?.success &&
+                      updateCheck.updateAvailable &&
+                      updateCheck.releaseUrl && (
+                        <button
+                          onClick={() => void window.api.openExternal(updateCheck.releaseUrl!)}
+                          className="inline-flex items-center gap-1.5 rounded-sm border border-accent-blue/30 bg-accent-blue/10 px-2.5 py-1 text-[10px] font-semibold text-accent-blue transition-colors hover:bg-accent-blue/15"
+                        >
+                          <ExternalLink size={11} />
+                          {t.viewRelease}
+                        </button>
+                      )}
+                    <button
+                      onClick={() => void checkForUpdates()}
+                      disabled={checkingUpdates}
+                      className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-surface px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-blue disabled:opacity-50"
+                    >
+                      <RefreshCw size={11} className={checkingUpdates ? 'animate-spin' : ''} />
+                      {checkingUpdates ? t.checkingUpdates : t.checkForUpdates}
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               <div className="mt-3 flex items-center gap-4">
                 <div className="flex flex-col">
