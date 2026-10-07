@@ -197,6 +197,24 @@ export default function Settings({
           <div className="relative z-10 space-y-4 p-4 text-sm">
             <div className="group flex items-center justify-between gap-6">
               <div>
+                <div className="text-text-primary transition-colors group-hover:text-accent-blue">
+                  {t.launchAtLoginLabel}
+                </div>
+                <div className="text-xs text-text-muted">{t.launchAtLoginDesc}</div>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center transition-transform active:scale-95">
+                <input
+                  type="checkbox"
+                  checked={settings.launchAtLogin}
+                  onChange={(event) => update({ launchAtLogin: event.target.checked })}
+                  className="peer sr-only"
+                />
+                <div className="peer h-4 w-8 rounded-sm bg-bg-hover shadow-inner after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3.5 after:rounded-sm after:bg-white after:content-[''] after:transition-all peer-checked:bg-accent-blue peer-checked:after:translate-x-full" />
+              </label>
+            </div>
+
+            <div className="group flex items-center justify-between gap-6 border-t border-border-subtle pt-4">
+              <div>
                 <div className="text-text-primary transition-colors group-hover:text-accent-yellow">
                   {t.themeLabel}
                 </div>
