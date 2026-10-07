@@ -15,6 +15,7 @@ import type { AdbService } from './services/adbService'
 import type { GnirehtetService } from './services/gnirehtetService'
 import { loadSettings, saveSettings } from './services/settingsService'
 import { checkForUpdates } from './services/updateService'
+import { getCrashTelemetryState } from './services/telemetryService'
 
 interface IpcDependencies {
   adbService: AdbService
@@ -22,7 +23,7 @@ interface IpcDependencies {
   getDeviceSnapshot: () => Promise<AdbSnapshot>
   getMainWindow: () => BrowserWindow | null
   hideToTray: () => void
-  onSettingsChanged: () => void
+  onSettingsChanged: (settings: AppSettings) => void
 }
 
 const ALLOWED_EXTERNAL_HOSTS = new Set(['fast.com', 'github.com'])
@@ -205,7 +206,7 @@ export function registerIpcHandlers({
       console.warn('Wirebound: Failed to update Windows login startup setting.', error)
     }
 
-    onSettingsChanged()
+    onSettingsChanged(saved)
     return withSystemStartupState(saved)
   })
 
@@ -217,6 +218,11 @@ export function registerIpcHandlers({
   ipcMain.handle('app:check-updates', (event) => {
     trusted(event)
     return checkForUpdates(app.getVersion())
+  })
+
+  ipcMain.handle('app:crash-telemetry-state', (event) => {
+    trusted(event)
+    return getCrashTelemetryState()
   })
 
   ipcMain.handle('app:diagnostics', async (event) => {
