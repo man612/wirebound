@@ -14,6 +14,7 @@ import type { ActionResult, AdbSnapshot, AppSettings, SaveReportResult } from '.
 import type { AdbService } from './services/adbService'
 import type { GnirehtetService } from './services/gnirehtetService'
 import { loadSettings, saveSettings } from './services/settingsService'
+import { checkForUpdates } from './services/updateService'
 
 interface IpcDependencies {
   adbService: AdbService
@@ -192,6 +193,11 @@ export function registerIpcHandlers({
   ipcMain.handle('app:version', (event) => {
     trusted(event)
     return app.getVersion()
+  })
+
+  ipcMain.handle('app:check-updates', (event) => {
+    trusted(event)
+    return checkForUpdates(app.getVersion())
   })
 
   ipcMain.handle('app:diagnostics', async (event) => {
