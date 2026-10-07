@@ -32,6 +32,11 @@ export interface SaveReportResult extends ActionResult {
   filePath?: string
 }
 
+export interface CrashTelemetryState {
+  available: boolean
+  uploadEnabled: boolean
+}
+
 export interface UpdateCheckResult extends ActionResult {
   currentVersion: string
   latestVersion?: string
@@ -44,6 +49,7 @@ export interface AppSettings {
   port: string
   autoStart: boolean
   launchAtLogin: boolean
+  telemetryEnabled: boolean
   customDns: string
   theme: 'light' | 'dark'
   language: 'en' | 'id'
@@ -110,6 +116,7 @@ export interface GnirehtetAPI {
   getDiagnostics: () => Promise<DiagnosticReport>
   exportSupportReport: (content: string) => Promise<SaveReportResult>
   checkForUpdates: () => Promise<UpdateCheckResult>
+  getCrashTelemetryState: () => Promise<CrashTelemetryState>
   testSpeedOnDevice: (deviceId: string) => Promise<ActionResult>
   openExternal: (url: string) => Promise<ActionResult>
   windowControl: (action: 'minimize' | 'maximize' | 'close') => void
