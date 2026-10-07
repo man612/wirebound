@@ -1,0 +1,112 @@
+name: Runtime Upstream Watch
+
+on:
+  schedule:
+    - cron: '17 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  compare-runtime-versions:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Compare pinned runtime versions with upstream
+        id: runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = Get-Content 'scripts/prepare-runtime.ps1' -Raw
+
+          $platformMatch = [regex]::Match($script, "\$PlatformToolsVersion\s*=\s*'([^']+)'")
+          $gnirehtetMatch = [regex]::Match($script, "\$GnirehtetVersion\s*=\s*'([^']+)'")
+          if (-not $platformMatch.Success -or -not $gnirehtetMatch.Success) {
+            throw 'Could not read pinned runtime versions from scripts/prepare-runtime.ps1.'
+          }
+
+          $pinnedPlatform = $platformMatch.Groups[1].Value
+          $pinnedGnirehtet = $gnirehtetMatch.Groups[1].Value
+
+          $temp = Join-Path $env:RUNNER_TEMP 'wirebound-runtime-watch'
+          New-Item -ItemType Directory -Force $temp | Out-Null
+          $zip = Join-Path $temp 'platform-tools.zip'
+          Invoke-WebRequest 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip' -OutFile $zip
+          Expand-Archive $zip -DestinationPath $temp -Force
+
+          $properties = Get-Content (Join-Path $temp 'platform-tools\source.properties') -Raw
+          $revisionMatch = [regex]::Match($properties, 'Pkg\.Revision\s*=\s*([^\r\n]+)')
+          if (-not $revisionMatch.Success) {
+            throw 'Could not determine latest Android Platform-Tools version.'
+          }
+          $latestPlatform = $revisionMatch.Groups[1].Value.Trim()
+
+          $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/Genymobile/gnirehtet/releases/latest' -Headers @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'Wirebound-Runtime-Watch' }
+          $latestGnirehtet = ([string]$release.tag_name).TrimStart('v')
+
+          $updateAvailable = ($pinnedPlatform -ne $latestPlatform) -or ($pinnedGnirehtet -ne $latestGnirehtet)
+
+          "pinned_platform=$pinnedPlatform" >> $env:GITHUB_OUTPUT
+          "latest_platform=$latestPlatform" >> $env:GITHUB_OUTPUT
+          "pinned_gnirehtet=$pinnedGnirehtet" >> $env:GITHUB_OUTPUT
+          "latest_gnirehtet=$latestGnirehtet" >> $env:GITHUB_OUTPUT
+          "update_available=$($updateAvailable.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Platform-Tools: pinned=$pinnedPlatform latest=$latestPlatform"
+          Write-Host "Gnirehtet: pinned=$pinnedGnirehtet latest=$latestGnirehtet"
+
+      - name: Open runtime update issue
+        if: steps.runtime.outputs.update_available == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINNED_PLATFORM: ${{ steps.runtime.outputs.pinned_platform }}
+          LATEST_PLATFORM: ${{ steps.runtime.outputs.latest_platform }}
+          PINNED_GNIREHTET: ${{ steps.runtime.outputs.pinned_gnirehtet }}
+          LATEST_GNIREHTET: ${{ steps.runtime.outputs.latest_gnirehtet }}
+        run: |
+          $title = 'Runtime dependency update available'
+          $existing = gh issue list --state open --search "$title in:title" --json number,title --limit 20 | ConvertFrom-Json | Where-Object { $_.title -eq $title } | Select-Object -First 1
+
+          if ($existing) {
+            Write-Host "Issue #$($existing.number) already tracks this runtime update."
+            exit 0
+          }
+
+          $body = @"
+          An automated runtime check found that one or more pinned Wirebound runtimes no longer match upstream.
+
+          Runtime versions:
+          - Android Platform-Tools: pinned $env:PINNED_PLATFORM, latest $env:LATEST_PLATFORM
+          - Gnirehtet: pinned $env:PINNED_GNIREHTET, latest $env:LATEST_GNIREHTET
+
+          Before updating:
+          - read upstream release notes;
+          - verify the Windows archive source;
+          - update the pinned SHA-256 in scripts/prepare-runtime.ps1;
+          - run the full Windows CI and package smoke test;
+          - verify ADB coexistence and Gnirehtet start/stop behavior.
+
+          This issue was created automatically by Runtime Upstream Watch.
+          "@
+
+          gh issue create --title $title --body $body
+
+      - name: Close resolved runtime update issue
+        if: steps.runtime.outputs.update_available == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = 'Runtime dependency update available'
+          $existing = gh issue list --state open --search "$title in:title" --json number,title --limit 20 | ConvertFrom-Json | Where-Object { $_.title -eq $title } | Select-Object -First 1
+
+          if ($existing) {
+            gh issue close $existing.number --comment 'Pinned runtime versions now match the latest upstream releases.'
+          }
