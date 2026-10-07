@@ -34,6 +34,7 @@ export const translations = {
     onboardingNotReadyYet:
       'Resolve the item above, then check again. Setup will unlock when an authorized device and the required runtime are ready.',
     onboardingBack: 'Back',
+    onboardingContinueAnyway: 'Continue to Dashboard',
 
     testDesktopSpeed: 'Test Desktop Speed',
     testDeviceSpeed: 'Speed Test',
@@ -161,6 +162,7 @@ export const translations = {
     onboardingNotReadyYet:
       'Selesaikan masalah di atas lalu periksa lagi. Setup akan terbuka setelah perangkat terotorisasi dan runtime yang dibutuhkan siap.',
     onboardingBack: 'Kembali',
+    onboardingContinueAnyway: 'Lanjut ke Dasbor',
 
     testDesktopSpeed: 'Tes Kecepatan PC',
     testDeviceSpeed: 'Tes Kecepatan',
