@@ -58,7 +58,14 @@ function App(): React.JSX.Element {
     <div className="w-screen h-screen flex overflow-hidden font-sans text-text-primary bg-bg-surface selection:bg-blue-600/30 theme-transition">
       <TitleBar />
 
-      {!settings.onboardingCompleted && <OnboardingScreen onComplete={handleCompleteOnboarding} />}
+      {!settings.onboardingCompleted && (
+        <OnboardingScreen
+          onComplete={handleCompleteOnboarding}
+          devices={devices}
+          adbError={adbError}
+          diagnostics={diagnostics}
+        />
+      )}
 
       {settings.onboardingCompleted && (
         <>
