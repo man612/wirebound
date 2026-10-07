@@ -1,12 +1,16 @@
 import {
   app,
+  dialog,
   ipcMain,
   shell,
   type BrowserWindow,
   type IpcMainEvent,
   type IpcMainInvokeEvent
 } from 'electron'
-import type { ActionResult } from '../shared/types'
+import { writeFile } from 'fs/promises'
+import { release } from 'os'
+import { join } from 'path'
+import type { ActionResult, AdbSnapshot, SaveReportResult } from '../shared/types'
 import type { AdbService } from './services/adbService'
 import type { GnirehtetService } from './services/gnirehtetService'
 import { loadSettings, saveSettings } from './services/settingsService'
@@ -14,6 +18,7 @@ import { loadSettings, saveSettings } from './services/settingsService'
 interface IpcDependencies {
   adbService: AdbService
   gnirehtetService: GnirehtetService
+  getDeviceSnapshot: () => Promise<AdbSnapshot>
   getMainWindow: () => BrowserWindow | null
 }
 
@@ -49,6 +54,41 @@ function controlWindow(window: BrowserWindow, action: unknown): void {
   }
 }
 
+async function saveSupportReport(
+  content: unknown,
+  getMainWindow: () => BrowserWindow | null
+): Promise<SaveReportResult> {
+  if (typeof content !== 'string' || content.length === 0 || content.length > 100_000) {
+    return { success: false, error: 'Support report content is invalid.' }
+  }
+
+  const mainWindow = getMainWindow()
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { success: false, error: 'Wirebound window is not available.' }
+  }
+
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Wirebound Support Report',
+      defaultPath: join(app.getPath('documents'), `wirebound-support-${timestamp}.txt`),
+      filters: [{ name: 'Text file', extensions: ['txt'] }]
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { success: true, cancelled: true }
+    }
+
+    await writeFile(result.filePath, content, 'utf8')
+    return { success: true, filePath: result.filePath }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to export support report.'
+    }
+  }
+}
+
 async function openExternal(url: unknown): Promise<ActionResult> {
   try {
     if (typeof url !== 'string') {
@@ -73,6 +113,7 @@ async function openExternal(url: unknown): Promise<ActionResult> {
 export function registerIpcHandlers({
   adbService,
   gnirehtetService,
+  getDeviceSnapshot,
   getMainWindow
 }: IpcDependencies): void {
   const trusted = (event: IpcMainInvokeEvent | IpcMainEvent): void =>
@@ -95,7 +136,7 @@ export function registerIpcHandlers({
 
   ipcMain.handle('adb:snapshot', (event) => {
     trusted(event)
-    return adbService.getSnapshot()
+    return getDeviceSnapshot()
   })
 
   ipcMain.handle('adb:testSpeed', (event, deviceId: unknown) => {
@@ -118,9 +159,23 @@ export function registerIpcHandlers({
     return app.getVersion()
   })
 
-  ipcMain.handle('app:diagnostics', (event) => {
+  ipcMain.handle('app:diagnostics', async (event) => {
     trusted(event)
-    return adbService.getDiagnostics(gnirehtetService.getStatus())
+    const report = await adbService.getDiagnostics(gnirehtetService.getStatus())
+    return {
+      ...report,
+      appVersion: app.getVersion(),
+      system: {
+        platform: process.platform,
+        release: release(),
+        arch: process.arch
+      }
+    }
+  })
+
+  ipcMain.handle('app:export-support-report', (event, content: unknown) => {
+    trusted(event)
+    return saveSupportReport(content, getMainWindow)
   })
 
   ipcMain.handle('app:open-external', (event, url: unknown) => {
