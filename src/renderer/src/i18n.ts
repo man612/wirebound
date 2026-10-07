@@ -10,6 +10,30 @@ export const translations = {
     darkTheme: 'Dark',
     next: 'Next',
     getStarted: 'Get Started',
+    onboardingStepLabel: 'Step',
+    onboardingConnectTitle: 'Connect your Android device',
+    onboardingConnectDesc:
+      'Before Wirebound can share internet, Windows must be able to see and authorize your Android device.',
+    onboardingChecklistUsb: 'Connect the Android device to this PC with a data-capable USB cable.',
+    onboardingChecklistDebugging:
+      'Enable Developer options and USB debugging on the Android device.',
+    onboardingChecklistAuthorize:
+      'Unlock the device and accept the USB debugging authorization prompt for this computer.',
+    onboardingVpnNote:
+      'The Android VPN permission appears after you start the connection. Wirebound does not need root access.',
+    onboardingPreflightTitle: 'Check that everything is ready',
+    onboardingPreflightDesc:
+      'Wirebound will check its runtime, ADB access, and whether at least one Android device is authorized.',
+    onboardingSystemChecks: 'System checks',
+    onboardingRefresh: 'Check again',
+    onboardingChecking: 'Checking Wirebound and ADB...',
+    onboardingDeviceReadyTitle: 'Android device is ready',
+    onboardingDeviceReadyDesc:
+      'Wirebound can communicate with at least one authorized Android device.',
+    onboardingReadyToFinish: 'Everything needed for the first connection is ready.',
+    onboardingNotReadyYet:
+      'Resolve the item above, then check again. Setup will unlock when an authorized device and the required runtime are ready.',
+    onboardingBack: 'Back',
 
     testDesktopSpeed: 'Test Desktop Speed',
     testDeviceSpeed: 'Speed Test',
@@ -112,6 +136,31 @@ export const translations = {
     darkTheme: 'Gelap',
     next: 'Selanjutnya',
     getStarted: 'Mulai Sekarang',
+    onboardingStepLabel: 'Langkah',
+    onboardingConnectTitle: 'Hubungkan perangkat Android',
+    onboardingConnectDesc:
+      'Sebelum Wirebound bisa membagikan internet, Windows harus bisa melihat dan mengizinkan perangkat Android kamu.',
+    onboardingChecklistUsb:
+      'Hubungkan perangkat Android ke PC ini dengan kabel USB yang mendukung transfer data.',
+    onboardingChecklistDebugging:
+      'Aktifkan Opsi pengembang dan USB debugging di perangkat Android.',
+    onboardingChecklistAuthorize:
+      'Buka kunci perangkat lalu setujui prompt izin USB debugging untuk komputer ini.',
+    onboardingVpnNote:
+      'Izin VPN Android akan muncul setelah koneksi dimulai. Wirebound tidak membutuhkan akses root.',
+    onboardingPreflightTitle: 'Pastikan semuanya sudah siap',
+    onboardingPreflightDesc:
+      'Wirebound akan memeriksa runtime, akses ADB, dan memastikan setidaknya satu perangkat Android sudah diizinkan.',
+    onboardingSystemChecks: 'Pemeriksaan sistem',
+    onboardingRefresh: 'Periksa lagi',
+    onboardingChecking: 'Memeriksa Wirebound dan ADB...',
+    onboardingDeviceReadyTitle: 'Perangkat Android sudah siap',
+    onboardingDeviceReadyDesc:
+      'Wirebound sudah bisa berkomunikasi dengan setidaknya satu perangkat Android yang diizinkan.',
+    onboardingReadyToFinish: 'Semua yang dibutuhkan untuk koneksi pertama sudah siap.',
+    onboardingNotReadyYet:
+      'Selesaikan masalah di atas lalu periksa lagi. Setup akan terbuka setelah perangkat terotorisasi dan runtime yang dibutuhkan siap.',
+    onboardingBack: 'Kembali',
 
     testDesktopSpeed: 'Tes Kecepatan PC',
     testDeviceSpeed: 'Tes Kecepatan',
