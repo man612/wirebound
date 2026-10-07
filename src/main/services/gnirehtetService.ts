@@ -124,9 +124,9 @@ export class GnirehtetService {
     }
   }
 
-  public async syncStatusWithDeviceState(devices?: AdbDevice[]): Promise<void> {
+  public async syncStatusWithDeviceState(devices?: AdbDevice[]): Promise<Set<string>> {
     if (this.isStopping) {
-      return
+      return new Set()
     }
 
     if (!this.childProcess) {
@@ -134,15 +134,17 @@ export class GnirehtetService {
       if (this.status === 'connected' || this.status === 'connecting') {
         this.setStatus('disconnected')
       }
-      return
+      return new Set()
     }
 
     try {
       const activeClients = await this.adbService.getActiveGnirehtetClients(devices)
       this.lastAdbError = null
       this.setStatus(activeClients.length > 0 ? 'connected' : 'connecting')
+      return new Set(activeClients.map((device) => device.id))
     } catch (error) {
       this.reportAdbUnavailable(readError(error, 'Unable to query Gnirehtet client state.'))
+      return new Set()
     }
   }
 

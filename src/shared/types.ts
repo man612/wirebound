@@ -1,8 +1,11 @@
+export type DeviceTunnelStatus = 'idle' | 'waiting' | 'connected' | 'error' | 'unavailable'
+
 export interface AdbDevice {
   id: string
   name: string
   battery?: string
   status: 'device' | 'offline' | 'unauthorized' | 'no permissions'
+  tunnelStatus?: DeviceTunnelStatus
 }
 
 export interface AdbSnapshot {
@@ -15,6 +18,11 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 export interface ActionResult {
   success: boolean
   error?: string
+}
+
+export interface SaveReportResult extends ActionResult {
+  cancelled?: boolean
+  filePath?: string
 }
 
 export interface AppSettings {
@@ -59,9 +67,17 @@ export interface DiagnosticDevice {
   gnirehtetActive?: boolean
 }
 
+export interface DiagnosticSystemInfo {
+  platform: string
+  release: string
+  arch: string
+}
+
 export interface DiagnosticReport {
   generatedAt: string
   engineStatus: ConnectionStatus
+  appVersion?: string
+  system?: DiagnosticSystemInfo
   checks: DiagnosticCheck[]
   devices: DiagnosticDevice[]
 }
@@ -75,6 +91,7 @@ export interface GnirehtetAPI {
   saveSettings: (settings: AppSettings) => Promise<AppSettings>
   getAppVersion: () => Promise<string>
   getDiagnostics: () => Promise<DiagnosticReport>
+  exportSupportReport: (content: string) => Promise<SaveReportResult>
   testSpeedOnDevice: (deviceId: string) => Promise<ActionResult>
   openExternal: (url: string) => Promise<ActionResult>
   windowControl: (action: 'minimize' | 'maximize' | 'close') => void

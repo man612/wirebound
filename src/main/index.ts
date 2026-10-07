@@ -7,7 +7,8 @@ import { createMainWindow } from './window'
 import { loadSettings } from './services/settingsService'
 import { AdbService } from './services/adbService'
 import { GnirehtetService } from './services/gnirehtetService'
-import type { AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
+import { applyDeviceTunnelStates } from './deviceState'
+import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
 
 const DEVICE_POLL_INTERVAL_MS = 4000
 
@@ -35,16 +36,25 @@ function sendStatus(status: ConnectionStatus): void {
   sendToRenderer('gnirehtet:status-change', status)
 }
 
+async function getDeviceSnapshot(adb: AdbService, engine: GnirehtetService): Promise<AdbSnapshot> {
+  const snapshot = await adb.getSnapshot()
+
+  if (snapshot.error) {
+    engine.reportAdbUnavailable(snapshot.error)
+    return snapshot
+  }
+
+  const activeDeviceIds = await engine.syncStatusWithDeviceState(snapshot.devices)
+  return {
+    ...snapshot,
+    devices: applyDeviceTunnelStates(snapshot.devices, engine.getStatus(), activeDeviceIds)
+  }
+}
+
 function startDevicePolling(adb: AdbService, engine: GnirehtetService): void {
   const poll = async (): Promise<void> => {
-    const snapshot = await adb.getSnapshot()
+    const snapshot = await getDeviceSnapshot(adb, engine)
     sendToRenderer('adb:devices-change', snapshot)
-
-    if (snapshot.error) {
-      engine.reportAdbUnavailable(snapshot.error)
-    } else {
-      await engine.syncStatusWithDeviceState(snapshot.devices)
-    }
 
     if (!shutdownStarted) {
       devicePoller = setTimeout(() => void poll(), DEVICE_POLL_INTERVAL_MS)
@@ -94,6 +104,7 @@ async function bootstrap(): Promise<void> {
     registerIpcHandlers({
       adbService: adb,
       gnirehtetService: engine,
+      getDeviceSnapshot: () => getDeviceSnapshot(adb, engine),
       getMainWindow: () => mainWindow
     })
     handlersRegistered = true
