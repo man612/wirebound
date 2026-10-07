@@ -10,7 +10,7 @@ import {
 import { writeFile } from 'fs/promises'
 import { release } from 'os'
 import { join } from 'path'
-import type { ActionResult, AdbSnapshot, SaveReportResult } from '../shared/types'
+import type { ActionResult, AdbSnapshot, AppSettings, SaveReportResult } from '../shared/types'
 import type { AdbService } from './services/adbService'
 import type { GnirehtetService } from './services/gnirehtetService'
 import { loadSettings, saveSettings } from './services/settingsService'
@@ -20,6 +20,8 @@ interface IpcDependencies {
   gnirehtetService: GnirehtetService
   getDeviceSnapshot: () => Promise<AdbSnapshot>
   getMainWindow: () => BrowserWindow | null
+  hideToTray: () => void
+  onSettingsChanged: () => void
 }
 
 const ALLOWED_EXTERNAL_HOSTS = new Set(['fast.com', 'github.com'])
@@ -44,14 +46,36 @@ function assertTrustedSender(
   }
 }
 
-function controlWindow(window: BrowserWindow, action: unknown): void {
-  if (action === 'minimize') {
-    window.minimize()
+function controlWindow(window: BrowserWindow, action: unknown, hideToTray: () => void): void {
+  if (action === 'minimize' || action === 'close') {
+    hideToTray()
   } else if (action === 'maximize') {
     window.isMaximized() ? window.unmaximize() : window.maximize()
-  } else if (action === 'close') {
-    window.close()
   }
+}
+
+function getLaunchAtLogin(storedValue: boolean): boolean {
+  if (process.platform !== 'win32' || !app.isPackaged) return storedValue
+
+  const state = app.getLoginItemSettings({ path: process.execPath })
+  return state.openAtLogin && state.executableWillLaunchAtLogin
+}
+
+function withSystemStartupState(settings: AppSettings): AppSettings {
+  return {
+    ...settings,
+    launchAtLogin: getLaunchAtLogin(settings.launchAtLogin)
+  }
+}
+
+function applyLaunchAtLogin(enabled: boolean): void {
+  if (process.platform !== 'win32' || !app.isPackaged) return
+
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    enabled,
+    path: process.execPath
+  })
 }
 
 async function saveSupportReport(
@@ -114,7 +138,9 @@ export function registerIpcHandlers({
   adbService,
   gnirehtetService,
   getDeviceSnapshot,
-  getMainWindow
+  getMainWindow,
+  hideToTray,
+  onSettingsChanged
 }: IpcDependencies): void {
   const trusted = (event: IpcMainInvokeEvent | IpcMainEvent): void =>
     assertTrustedSender(event, getMainWindow)
@@ -146,12 +172,21 @@ export function registerIpcHandlers({
 
   ipcMain.handle('settings:get', (event) => {
     trusted(event)
-    return loadSettings()
+    return withSystemStartupState(loadSettings())
   })
 
-  ipcMain.handle('settings:set', (event, settings: unknown) => {
+  ipcMain.handle('settings:set', async (event, settings: unknown) => {
     trusted(event)
-    return saveSettings(settings)
+    const saved = await saveSettings(settings)
+
+    try {
+      applyLaunchAtLogin(saved.launchAtLogin)
+    } catch (error) {
+      console.warn('Wirebound: Failed to update Windows login startup setting.', error)
+    }
+
+    onSettingsChanged()
+    return withSystemStartupState(saved)
   })
 
   ipcMain.handle('app:version', (event) => {
@@ -188,7 +223,7 @@ export function registerIpcHandlers({
     const mainWindow = getMainWindow()
 
     if (mainWindow && !mainWindow.isDestroyed()) {
-      controlWindow(mainWindow, action)
+      controlWindow(mainWindow, action, hideToTray)
     }
   })
 }
