@@ -4,6 +4,7 @@ import {
   Battery,
   CheckCircle2,
   ClipboardCopy,
+  Download,
   Laptop,
   Play,
   RefreshCw,
@@ -20,6 +21,7 @@ import type {
   ConnectionStatus,
   DiagnosticCheckId,
   DiagnosticReport,
+  DeviceTunnelStatus,
   LogEntry
 } from '../../../../shared/types'
 import type { Translation } from '../../i18n'
@@ -54,6 +56,30 @@ function getDeviceStatusLabel(status: AdbDevice['status'], t: Translation): stri
   if (status === 'unauthorized') return t.adbStatusUnauthorized
   if (status === 'offline') return t.adbStatusOffline
   return t.adbStatusNoAccess
+}
+
+function getTunnelStatusLabel(
+  status: DeviceTunnelStatus | undefined,
+  t: Translation
+): string {
+  if (status === 'connected') return t.tunnelConnected
+  if (status === 'waiting') return t.tunnelWaiting
+  if (status === 'idle') return t.tunnelIdle
+  if (status === 'error') return t.tunnelError
+  return t.tunnelUnavailable
+}
+
+function getTunnelStatusClass(status: DeviceTunnelStatus | undefined): string {
+  if (status === 'connected') {
+    return 'border-accent-green/30 bg-accent-green-dim/40 text-accent-green'
+  }
+  if (status === 'waiting') {
+    return 'border-accent-yellow/30 bg-amber-50 text-amber-700 dark:bg-yellow-950/20 dark:text-accent-yellow'
+  }
+  if (status === 'error') {
+    return 'border-accent-red/30 bg-accent-red-dim/40 text-accent-red'
+  }
+  return 'border-border-subtle bg-bg-primary text-text-muted'
 }
 
 function getDeviceSetupState(
@@ -144,7 +170,13 @@ function getDiagnosticLabel(id: DiagnosticCheckId, t: Translation): string {
 
 function formatDiagnosticReport(report: DiagnosticReport): string {
   const lines = [
-    'Wirebound Diagnostic Report',
+    'Wirebound Support Report',
+    `Wirebound version: ${report.appVersion ? `v${report.appVersion}` : 'unknown'}`,
+    `System: ${
+      report.system
+        ? `${report.system.platform} ${report.system.release} (${report.system.arch})`
+        : 'unknown'
+    }`,
     `Generated: ${report.generatedAt}`,
     `Engine status: ${report.engineStatus}`,
     '',
@@ -186,6 +218,7 @@ export default function Dashboard({
   const SetupIcon = setupState.icon
   const logEndRef = useRef<HTMLDivElement>(null)
   const [reportCopied, setReportCopied] = useState(false)
+  const [reportExported, setReportExported] = useState(false)
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -201,6 +234,20 @@ export default function Dashboard({
     } catch (error) {
       console.warn('Failed to copy diagnostic report.', error)
     }
+  }
+
+  const handleExportDiagnostics = async (): Promise<void> => {
+    if (!diagnostics.report) return
+
+    const result = await window.api.exportSupportReport(formatDiagnosticReport(diagnostics.report))
+    if (!result.success) {
+      console.warn('Failed to export support report.', result.error)
+      return
+    }
+    if (result.cancelled) return
+
+    setReportExported(true)
+    window.setTimeout(() => setReportExported(false), 1500)
   }
 
   const handleOpenDesktopSpeedTest = (): void => {
@@ -337,6 +384,14 @@ export default function Dashboard({
                 {reportCopied ? t.reportCopied : t.copyReport}
               </button>
               <button
+                onClick={() => void handleExportDiagnostics()}
+                disabled={!diagnostics.report}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Download size={12} />
+                {reportExported ? t.reportExported : t.exportReport}
+              </button>
+              <button
                 onClick={() => void diagnostics.run()}
                 disabled={diagnostics.isRunning}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-accent-blue/30 bg-accent-blue/10 px-2.5 py-1 text-[10px] font-semibold text-accent-blue transition-colors hover:bg-accent-blue/15 disabled:opacity-50"
@@ -425,10 +480,11 @@ export default function Dashboard({
           </div>
 
           <div className="overflow-x-auto rounded-sm border border-border-subtle bg-bg-surface theme-transition">
-            <table className="w-full min-w-[640px] border-collapse text-left text-xs">
+            <table className="w-full min-w-[760px] border-collapse text-left text-xs">
               <thead className="border-b border-border-subtle bg-bg-primary">
                 <tr>
                   <th className="w-28 px-3 py-2 font-semibold text-text-muted">{t.deviceStatus}</th>
+                  <th className="w-28 px-3 py-2 font-semibold text-text-muted">{t.tunnelStatus}</th>
                   <th className="px-3 py-2 font-semibold text-text-muted">{t.deviceId}</th>
                   <th className="px-3 py-2 font-semibold text-text-muted">{t.model}</th>
                   <th className="w-24 px-3 py-2 font-semibold text-text-muted">{t.power}</th>
@@ -466,6 +522,24 @@ export default function Dashboard({
                         {getDeviceStatusLabel(device.status, t)}
                       </span>
                     </td>
+                    <td className="px-3 py-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-semibold ${getTunnelStatusClass(device.tunnelStatus)}`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            device.tunnelStatus === 'connected'
+                              ? 'bg-accent-green'
+                              : device.tunnelStatus === 'waiting'
+                                ? 'bg-accent-yellow'
+                                : device.tunnelStatus === 'error'
+                                  ? 'bg-accent-red'
+                                  : 'bg-text-muted'
+                          }`}
+                        />
+                        {getTunnelStatusLabel(device.tunnelStatus, t)}
+                      </span>
+                    </td>
                     <td className="px-3 py-1.5 font-mono text-text-muted">{device.id}</td>
                     <td className="px-3 py-1.5 font-medium text-text-primary transition-colors group-hover:text-accent-blue">
                       {device.name || 'Unknown'}
@@ -479,7 +553,7 @@ export default function Dashboard({
                     <td className="px-3 py-1.5 text-right">
                       <button
                         onClick={() => handleOpenDeviceSpeedTest(device.id)}
-                        disabled={device.status !== 'device'}
+                        disabled={device.tunnelStatus !== 'connected'}
                         className="group/btn inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-all hover:border-accent-blue/50 hover:bg-accent-blue/10 hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <Zap
