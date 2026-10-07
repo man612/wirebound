@@ -8,9 +8,9 @@ import { loadSettings } from './services/settingsService'
 import { AdbService } from './services/adbService'
 import { GnirehtetService } from './services/gnirehtetService'
 import { applyDeviceTunnelStates } from './deviceState'
+import { getDevicePollInterval } from './polling'
 import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
 
-const DEVICE_POLL_INTERVAL_MS = 4000
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -142,7 +142,12 @@ function startDevicePolling(adb: AdbService, engine: GnirehtetService): void {
     sendToRenderer('adb:devices-change', snapshot)
 
     if (!shutdownStarted) {
-      devicePoller = setTimeout(() => void poll(), DEVICE_POLL_INTERVAL_MS)
+      const interval = getDevicePollInterval(
+        engine.getStatus(),
+        snapshot.devices.length > 0,
+        mainWindow?.isVisible() ?? false
+      )
+      devicePoller = setTimeout(() => void poll(), interval)
     }
   }
 

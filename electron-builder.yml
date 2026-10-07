@@ -2,6 +2,9 @@ appId: com.wirebound.app
 productName: Wirebound
 asar: true
 compression: maximum
+electronLanguages:
+  - en-US
+  - id
 
 directories:
   buildResources: build
