@@ -82,6 +82,70 @@ describe('AdbService runtime scenarios', () => {
     expect(executor).not.toHaveBeenCalledWith(expect.arrayContaining(['pidof']), expect.anything())
   })
 
+  it('removes only the Gnirehtet-owned ADB reverse socket', async () => {
+    const executor = vi.fn(async (args: string[]): Promise<string> => {
+      const command = args.join(' ')
+      if (command === '-s ABC123 reverse --list') {
+        return 'UsbFfs localabstract:other-app tcp:9222\nUsbFfs localabstract:gnirehtet tcp:31416\n'
+      }
+      if (command === '-s ABC123 reverse --remove localabstract:gnirehtet') return ''
+      throw new Error('Unexpected ADB command: ' + command)
+    })
+    const service = new AdbService(paths, executor)
+
+    await expect(service.cleanupGnirehtetReverse('ABC123')).resolves.toBe(true)
+    expect(executor).toHaveBeenCalledTimes(2)
+    expect(executor).toHaveBeenNthCalledWith(
+      2, ['-s', 'ABC123', 'reverse', '--remove', 'localabstract:gnirehtet'], 3000
+    )
+    expect(executor).not.toHaveBeenCalledWith(
+      expect.arrayContaining(['--remove-all']), expect.anything()
+    )
+  })
+
+  it('does not remove another app reverse socket when no Gnirehtet mapping exists', async () => {
+    const executor = vi.fn(async () => 'UsbFfs localabstract:other-app tcp:9222\n')
+    const service = new AdbService(paths, executor)
+
+    await expect(service.cleanupGnirehtetReverse('ABC123')).resolves.toBe(false)
+    expect(executor).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects device IDs that could inject ADB options', async () => {
+    const executor = vi.fn()
+    const service = new AdbService(paths, executor)
+
+    await expect(service.cleanupGnirehtetReverse('--remove-all')).rejects.toThrow(
+      'Invalid Android device identifier.'
+    )
+    expect(executor).not.toHaveBeenCalled()
+  })
+
+  it('removes stale reverse mapping on quit even if no VPN is active; skips offline phones', async () => {
+    const executor = vi.fn(async (args: string[]): Promise<string> => {
+      const command = args.join(' ')
+      if (command === '-s ABC123 reverse --list') {
+        return 'UsbFfs localabstract:gnirehtet tcp:31416\n'
+      }
+      if (command === '-s ABC123 reverse --remove localabstract:gnirehtet') return ''
+      throw new Error('Unexpected ADB command: ' + command)
+    })
+    const service = new AdbService(paths, executor)
+    vi.spyOn(service, 'getSnapshot').mockResolvedValue({
+      devices: [
+        { id: 'ABC123', name: 'Ready', status: 'device' },
+        { id: 'OFFLINE', name: 'Offline', status: 'offline' }
+      ]
+    })
+    vi.spyOn(service, 'getActiveGnirehtetClients').mockResolvedValue([])
+
+    await expect(service.stopAllClients()).resolves.toBe(0)
+    expect(executor).toHaveBeenCalledTimes(2)
+    expect(executor).not.toHaveBeenCalledWith(
+      expect.arrayContaining(['OFFLINE']), expect.anything()
+    )
+  })
+
   it('detects active Gnirehtet clients only on authorized devices', async () => {
     const executor = vi.fn(async (args: string[]): Promise<string> => {
       const command = args.join(' ')

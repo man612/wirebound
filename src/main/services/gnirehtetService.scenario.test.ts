@@ -39,20 +39,24 @@ function createAdbDouble(): {
   ensureServerReady: ReturnType<typeof vi.fn>
   getActiveGnirehtetClients: ReturnType<typeof vi.fn>
   stopAllClients: ReturnType<typeof vi.fn>
+  cleanupGnirehtetReverse: ReturnType<typeof vi.fn>
 } {
   const ensureServerReady = vi.fn().mockResolvedValue(undefined)
   const getActiveGnirehtetClients = vi.fn().mockResolvedValue([])
   const stopAllClients = vi.fn().mockResolvedValue(0)
+  const cleanupGnirehtetReverse = vi.fn().mockResolvedValue(true)
 
   return {
     adb: {
       ensureServerReady,
       getActiveGnirehtetClients,
-      stopAllClients
+      stopAllClients,
+      cleanupGnirehtetReverse
     } as unknown as AdbService,
     ensureServerReady,
     getActiveGnirehtetClients,
-    stopAllClients
+    stopAllClients,
+    cleanupGnirehtetReverse
   }
 }
 
@@ -125,6 +129,7 @@ describe('GnirehtetService lifecycle scenarios', () => {
       10_000
     )
     expect(commandRunner).toHaveBeenNthCalledWith(2, ['stop', 'ABC123'], 10_000)
+    expect(adb.cleanupGnirehtetReverse).toHaveBeenCalledWith('ABC123')
   })
 
   it('rejects unsafe device identifiers before invoking Gnirehtet', async () => {

@@ -116,6 +116,14 @@ export function parseGnirehtetVpnConnected(output: string): boolean {
   )
 }
 
+// Gnirehtet owns this specific socket; never delete unrelated ADB reverse mappings.
+export function hasGnirehtetReverseMapping(output: string): boolean {
+  return output.split(/\r?\n/).some((line) => {
+    const fields = line.trim().split(/\s+/)
+    return fields.length === 3 && fields[1] === 'localabstract:gnirehtet' && /^tcp:\d+$/.test(fields[2])
+  })
+}
+
 export function maskDeviceId(deviceId: string): string {
   const value = deviceId.trim()
   if (value.length <= 4) return '****'
@@ -401,6 +409,18 @@ export class AdbService {
     }
   }
 
+  public async cleanupGnirehtetReverse(deviceId: string): Promise<boolean> {
+    if (deviceId.startsWith('-') || !/^[A-Za-z0-9._:-]{1,255}$/.test(deviceId)) {
+      throw new Error('Invalid Android device identifier.')
+    }
+
+    const mappings = await this.execAdb(['-s', deviceId, 'reverse', '--list'], 3000)
+    if (!hasGnirehtetReverseMapping(mappings)) return false
+
+    await this.execAdb(['-s', deviceId, 'reverse', '--remove', 'localabstract:gnirehtet'], 3000)
+    return true
+  }
+
   public async stopAllClients(): Promise<number> {
     const snapshot = await this.getSnapshot()
 
@@ -410,6 +430,19 @@ export class AdbService {
 
     const activeDevices = await this.getActiveGnirehtetClients(snapshot.devices)
     await Promise.all(activeDevices.map((device) => this.stopClient(device.id)))
+
+    // Stale Gnirehtet reverse forwarding can outlive the Android VPN client.
+    // Check each authorized phone, even when its VPN was already stopped.
+    const authorizedDevices = snapshot.devices.filter((device) => device.status === 'device')
+    await Promise.all(
+      authorizedDevices.map(async (device) => {
+        try {
+          await this.cleanupGnirehtetReverse(device.id)
+        } catch (error) {
+          console.warn('Wirebound: Could not clear Gnirehtet reverse tunnel.', error)
+        }
+      })
+    )
     return activeDevices.length
   }
 
