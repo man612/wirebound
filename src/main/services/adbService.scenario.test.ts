@@ -65,11 +65,28 @@ describe('AdbService runtime scenarios', () => {
     })
   })
 
+  it('does not report a disconnected VPN as active when the app process survives', async () => {
+    const executor = vi.fn(async (args: string[]): Promise<string> => {
+      if (args.join(' ').endsWith('dumpsys connectivity')) {
+        return '2167 com.genymobile.gnirehtet\\nNetworkAgentInfo{ni{WIFI CONNECTED}}'
+      }
+      throw new Error('Unexpected command')
+    })
+    const service = new AdbService(paths, executor)
+
+    const active = await service.getActiveGnirehtetClients([
+      { id: 'ABC123', name: 'Ready phone', status: 'device' }
+    ])
+
+    expect(active).toEqual([])
+    expect(executor).not.toHaveBeenCalledWith(expect.arrayContaining(['pidof']), expect.anything())
+  })
+
   it('detects active Gnirehtet clients only on authorized devices', async () => {
     const executor = vi.fn(async (args: string[]): Promise<string> => {
       const command = args.join(' ')
-      if (command.includes('-s ABC123') && command.endsWith('pidof com.genymobile.gnirehtet')) {
-        return '4321\n'
+      if (command.includes('-s ABC123') && command.endsWith('dumpsys connectivity')) {
+        return 'NetworkAgentInfo{network{110} ni{VPN CONNECTED extra: VPN:com.genymobile.gnirehtet}}'
       }
       throw new Error('client not active')
     })

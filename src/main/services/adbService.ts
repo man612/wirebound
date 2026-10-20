@@ -105,6 +105,17 @@ export function parseTunnelTraffic(output: string): DeviceTraffic | undefined {
   )[0]
 }
 
+// An Android app process can remain alive after its VPN is disconnected.
+// Only the active VPN network owned by Gnirehtet proves tethering is connected.
+export function parseGnirehtetVpnConnected(output: string): boolean {
+  return output.split(/\r?\n/).some(
+    (line) =>
+      line.includes('NetworkAgentInfo{') &&
+      /\bVPN\s+CONNECTED\b/.test(line) &&
+      line.includes(`VPN:${GNIREHTET_PACKAGE}`)
+  )
+}
+
 export function maskDeviceId(deviceId: string): string {
   const value = deviceId.trim()
   if (value.length <= 4) return '****'
@@ -496,18 +507,11 @@ export class AdbService {
 
   private async isGnirehtetClientActive(deviceId: string): Promise<boolean> {
     try {
-      const output = await this.execAdb(['-s', deviceId, 'shell', 'pidof', GNIREHTET_PACKAGE], 3000)
-      return output.trim().length > 0
+      const output = await this.execAdb(['-s', deviceId, 'shell', 'dumpsys', 'connectivity'], 5000)
+      return parseGnirehtetVpnConnected(output)
     } catch {
-      try {
-        const output = await this.execAdb(
-          ['-s', deviceId, 'shell', 'dumpsys', 'activity', 'services', GNIREHTET_PACKAGE],
-          4000
-        )
-        return output.includes(GNIREHTET_PACKAGE)
-      } catch {
-        return false
-      }
+      // Unknown is not connected: process existence alone cannot prove a VPN tunnel.
+      return false
     }
   }
 }
