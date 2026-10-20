@@ -254,6 +254,8 @@ export default function Dashboard({
   const [reportExported, setReportExported] = useState(false)
   const [deviceActionId, setDeviceActionId] = useState<string>()
   const [readyDismissed, setReadyDismissed] = useState(false)
+  const diagnosticsVisible =
+    diagnosticsExpanded || (Boolean(diagnostics.error) && !manuallyToggledRef.current)
 
   // Initial reveal is brief. Manual toggle is authoritative and cancels automation.
   useEffect(() => {
@@ -268,15 +270,10 @@ export default function Dashboard({
   }, [])
 
   useEffect(() => {
-    if (setupState.tone !== 'ready') setReadyDismissed(false)
-  }, [setupState.tone])
-
-  useEffect(() => {
-    // A failed scan stays visible, including one that completed after the initial reveal.
+    // Keep failed scans visible without synchronously setting React state in an effect.
     if (diagnostics.error && !diagnostics.isRunning) {
       if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
       collapseTimerRef.current = null
-      setDiagnosticsExpanded(true)
     }
   }, [diagnostics.error, diagnostics.isRunning])
 
@@ -311,7 +308,7 @@ export default function Dashboard({
     manuallyToggledRef.current = true
     if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
     collapseTimerRef.current = null
-    setDiagnosticsExpanded((previous) => !previous)
+    setDiagnosticsExpanded(!diagnosticsVisible)
   }
 
   const handleRerunDiagnostics = async (): Promise<void> => {
@@ -539,10 +536,10 @@ export default function Dashboard({
                 {diagnostics.report ? t.rerunDiagnostics : t.runDiagnostics}
               </button>
               <button type="button" onClick={handleToggleDiagnostics}
-                aria-expanded={diagnosticsExpanded} aria-controls="wirebound-diagnostic-details"
+                aria-expanded={diagnosticsVisible} aria-controls="wirebound-diagnostic-details"
                 className="inline-flex items-center gap-1 rounded-sm border border-border-subtle bg-bg-primary px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
-                {diagnosticsExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                {diagnosticsExpanded ? t.diagnosticsHide : t.diagnosticsShow}
+                {diagnosticsVisible ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                {diagnosticsVisible ? t.diagnosticsHide : t.diagnosticsShow}
               </button>
             </div>
           </div>
@@ -561,7 +558,7 @@ export default function Dashboard({
               <span className="ml-2 text-accent-red">{t.reportCopyFailed}</span>
             )}
           </div>
-          {diagnosticsExpanded && <div id="wirebound-diagnostic-details">
+          {diagnosticsVisible && <div id="wirebound-diagnostic-details">
           {!diagnostics.report && !diagnostics.error && (
             <p className="mt-2 text-xs text-text-secondary">{t.diagnosticsIdle}</p>
           )}
