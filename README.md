@@ -11,7 +11,9 @@ Wirebound handles device detection, Gnirehtet process lifecycle, DNS and relay c
 
 ## Project status
 
-Wirebound is currently in **beta**. The core Windows reverse-tethering workflow works, but real-world compatibility still depends on Windows USB drivers, Android versions, device firmware, ADB authorization, and Gnirehtet itself.
+Wirebound is currently in **beta**. The core Windows reverse-tethering workflow works, but real-world compatibility still depends on Windows USB drivers, Android versions, device firmware, ADB authorization, and Gnirehtet itself. The latest published Windows release is v1.1.1; the newer v1.2 reliability improvements remain **under release validation**.
+
+**Hardware evidence for v1.2:** connection, disconnect, reconnect, and measured traffic have been exercised on one Motorola moto g45 5G running Android 15 with Windows 11. Multi-device command paths have automated tests, but simultaneous connection of two real phones has **not** been validated. See [v1.2 release readiness](./docs/V1_2_RELEASE_READINESS.md).
 
 A `Connected` state means the desktop relay is running and a Gnirehtet client is active on at least one Android device. It does **not** claim that end-to-end internet access has been independently measured. Use the built-in device speed-test action to verify actual connectivity.
 
@@ -32,9 +34,9 @@ A `Connected` state means the desktop relay is running and a Gnirehtet client is
 - **Device speed-test shortcut** â€” Opens Fast.com on an authorized Android device to verify real connectivity.
 - **Privacy-safe diagnostics** — Checks runtime files, ADB response, device authorization, Android/API version, and Gnirehtet client state; copied reports mask device serials.
 - **Light and dark themes** â€” With English and Indonesian localization.
-- **Graceful cleanup** â€” Stopping or closing Wirebound also attempts to stop Gnirehtet clients on attached devices.
+- **Graceful cleanup** â€” Stopping tethering or choosing **Quit** from the tray attempts to clean up Gnirehtet clients and Wirebound-owned ADB reverse mappings. **Closing the window hides Wirebound to the tray** and does not end an active tethering session.
 
-Wirebound intentionally does **not** show fabricated traffic telemetry. A real throughput monitor can be added later only when it is backed by measurable network counters.
+Wirebound displays **real cumulative RX/TX byte counts** read from the Android VPN TUN interface through ADB. These totals are **not live transfer speeds or independently verified internet throughput**. Devices that do not expose readable counters display an unavailable state instead of invented numbers. Use **Speed Test** to check real internet access.
 
 ## Relationship with Gnirehtet
 
