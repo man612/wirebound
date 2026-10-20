@@ -122,6 +122,12 @@ export class GnirehtetService {
     try {
       await this.adbService.ensureServerReady()
       await this.runDeviceCommand(['stop', deviceId], 10_000)
+      try {
+        await this.adbService.cleanupGnirehtetReverse(deviceId)
+      } catch (error) {
+        // The VPN stop succeeded; a stale ADB reverse tunnel is only a cleanup warning.
+        this.sendLog(`Could not remove Gnirehtet USB tunnel: ${readError(error, 'ADB error')}`, 'stderr')
+      }
       this.sendLog('Stopped tethering on the selected Android device.', 'info')
       await this.syncStatusWithDeviceState()
       return { success: true }

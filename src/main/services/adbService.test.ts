@@ -1,12 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyDeviceAccess,
+  hasGnirehtetReverseMapping,
   maskDeviceId,
   parseAdbDevices,
   parseBatteryLevel,
   parseGnirehtetVpnConnected,
   parseTunnelTraffic
 } from './adbService'
+
+describe('hasGnirehtetReverseMapping', () => {
+  it('detects only the Gnirehtet socket in a device ADB reverse listing', () => {
+    const output = [
+      'UsbFfs localabstract:another-app tcp:8443',
+      'UsbFfs localabstract:gnirehtet tcp:31416'
+    ].join('\n')
+    expect(hasGnirehtetReverseMapping(output)).toBe(true)
+  })
+
+  it('does not accept similarly named sockets, non-TCP remotes or an empty list', () => {
+    expect(hasGnirehtetReverseMapping('UsbFfs localabstract:gnirehtet-extra tcp:31416')).toBe(false)
+    expect(hasGnirehtetReverseMapping('UsbFfs localabstract:gnirehtet localabstract:other')).toBe(false)
+    expect(hasGnirehtetReverseMapping('')).toBe(false)
+  })
+})
 
 describe('parseAdbDevices', () => {
   it('parses supported ADB device states and ignores headers', () => {
