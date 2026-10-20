@@ -82,6 +82,12 @@ export default function OnboardingScreen({
 }: OnboardingProps): React.JSX.Element {
   const [lang, setLang] = useState<Language>('en')
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+
+  // Preview the selected appearance during setup, not only after completing it.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
   const [step, setStep] = useState<OnboardingStep>('appearance')
   const t = useMemo(() => translations[lang], [lang])
 
