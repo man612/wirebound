@@ -45,6 +45,7 @@ export const translations = {
     runDiagnostics: 'Run Diagnostics',
     rerunDiagnostics: 'Run Again',
     copyReport: 'Copy Report',
+    copyReportHelp: 'Copy a masked troubleshooting report for support.'
     reportCopied: 'Copied',
     copyingReport: 'Copying...',
     reportCopySuccess: 'Report copied to clipboard',
@@ -216,6 +217,7 @@ export const translations = {
     runDiagnostics: 'Jalankan Diagnostik',
     rerunDiagnostics: 'Jalankan Lagi',
     copyReport: 'Salin Laporan',
+    copyReportHelp: 'Salin laporan diagnostik dengan ID tersamarkan untuk bantuan teknis.'
     reportCopied: 'Tersalin',
     copyingReport: 'Menyalin...',
     reportCopySuccess: 'Laporan berhasil disalin',
