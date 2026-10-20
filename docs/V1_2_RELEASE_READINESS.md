@@ -47,7 +47,8 @@ Observed test hardware:
 - [ ] USB disconnection/reconnection and revoked or unauthorized access behavior on the single available handset
 - [ ] Browser/network check with Wi-Fi/mobile-data isolated where safe and practical
 - [ ] Review changes in README, release notes, installer checksum/signing policy
-- [ ] Bump both package.json and package-lock.json to 1.2.0 before creating v1.2.0 tag
+- [x] Prepare v1.2.0 versions in package.json and package-lock.json on release preparation branch; no v1.2.0 Git tag or public release created
+- [ ] Verify final versioned Windows installer, checksum and release notes before creating v1.2.0 tag
 - [ ] Physical simultaneous two-phone test — **WAIVED, not a blocker; no compatibility claim**
 
 ## Sources for lifecycle and installer semantics

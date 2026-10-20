@@ -35,6 +35,10 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne "v$version") {
             throw "Tag $env:GITHUB_REF_NAME does not match package version v$version."
           }
+          $lock = Get-Content package-lock.json -Raw | ConvertFrom-Json -AsHashtable
+          if ($version -ne $lock.version -or $version -ne $lock.packages[''].version) {
+            throw "Package-lock version does not match tag $env:GITHUB_REF_NAME."
+          }
 
       - name: Verify source
         run: |

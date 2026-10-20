@@ -111,7 +111,9 @@ Wirebound is intentionally Windows-only today. The runtime paths, ADB distributi
 
 ## Releases
 
-CI runs on Windows and verifies linting, TypeScript, unit tests, production build, and an unpacked package smoke test. Tags matching `v*` trigger the Windows release workflow.
+CI runs on Windows and verifies linting, TypeScript, unit tests, production build, and an unpacked package smoke test. Tags matching `v*` trigger the Windows release workflow. The source version can be ahead of the latest published GitHub release; a version change alone does not publish an installer.
+
+The [changelog](./CHANGELOG.md), [v1.2 draft release notes](./docs/RELEASE_NOTES_v1.2.0.md), and [release readiness evidence](./docs/V1_2_RELEASE_READINESS.md) distinguish completed features from physically verified configurations.
 
 Release artifacts should be treated as the canonical user distribution. Source checkouts fetch pinned runtime dependencies during development/build rather than storing executable binaries in Git. Release installers also receive a GitHub artifact attestation, which can be verified with `gh attestation verify <installer.exe> -R man612/wirebound`.
 
