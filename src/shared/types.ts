@@ -115,6 +115,7 @@ export interface GnirehtetAPI {
   getAppVersion: () => Promise<string>
   getDiagnostics: () => Promise<DiagnosticReport>
   exportSupportReport: (content: string) => Promise<SaveReportResult>
+  copySupportReport: (content: string) => Promise<ActionResult>
   checkForUpdates: () => Promise<UpdateCheckResult>
   getCrashTelemetryState: () => Promise<CrashTelemetryState>
   testSpeedOnDevice: (deviceId: string) => Promise<ActionResult>
