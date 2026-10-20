@@ -333,7 +333,8 @@ export default function Dashboard({
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
     setCopyState('copying')
     try {
-      await navigator.clipboard.writeText(formatDiagnosticReport(diagnostics.report))
+      const result = await window.api.copySupportReport(formatDiagnosticReport(diagnostics.report))
+      if (!result.success) throw new Error(result.error ?? 'Failed to copy support report.')
       setCopyState('success')
     } catch (error) {
       console.warn('Failed to copy diagnostic report.', error)
