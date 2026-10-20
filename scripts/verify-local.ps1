@@ -26,7 +26,8 @@ try {
   Run-Checked 'Prepare pinned runtime' 'npm' @('run', 'runtime:prepare')
   Run-Checked 'Lint' 'npm' @('run', 'lint', '--', '--no-cache')
   Run-Checked 'Typecheck' 'npm' @('run', 'typecheck')
-  Run-Checked 'Unit and scenario tests' 'npm' @('test')
+  # Keep local tests deterministic on PCs where many Vitest child workers time out.
+  Run-Checked 'Unit and scenario tests (single worker)' 'npm' @('test', '--', '--maxWorkers=1', '--no-file-parallelism')
   Run-Checked 'Production build' 'npm' @('run', 'build')
   if ($IncludePackage) {
     Run-Checked 'Windows package smoke test' 'npm' @('run', 'package:check')

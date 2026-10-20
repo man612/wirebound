@@ -28,7 +28,7 @@ From the repository root, run:
 
     pwsh -NoProfile -File scripts/verify-local.ps1 -IncludePackage
 
-This runs npm ci, the runtime-watch parser regression test, pinned runtime preparation, lint, typecheck, unit/scenario tests, production build, and Windows unpacked package smoke test. Omit -IncludePackage for the faster pre-commit pass. -SkipInstall avoids repeating npm ci only when dependencies have already been installed from the current lockfile.
+This runs npm ci, the runtime-watch parser regression test, pinned runtime preparation, lint, typecheck, unit/scenario tests, production build, and Windows unpacked package smoke test. The local script intentionally limits Vitest to one worker because some Windows PCs time out while spawning multiple test workers; hosted CI keeps its normal parallel configuration. Omit -IncludePackage for the faster pre-commit pass. -SkipInstall avoids repeating npm ci only when dependencies have already been installed from the current lockfile.
 
 A local successful run is **local evidence**, not a green GitHub check; report the branch/commit, platform, commands, result, and date in the PR. Do not silently bypass protected branch requirements.
 
