@@ -4,6 +4,7 @@ import {
   maskDeviceId,
   parseAdbDevices,
   parseBatteryLevel,
+  parseGnirehtetVpnConnected,
   parseTunnelTraffic
 } from './adbService'
 
@@ -64,6 +65,24 @@ describe('parseTunnelTraffic', () => {
     expect(
       parseTunnelTraffic('wlan0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0')
     ).toBeUndefined()
+  })
+})
+
+describe('parseGnirehtetVpnConnected', () => {
+  it('detects the actual connected Gnirehtet VPN on Android 15', () => {
+    const output =
+      'NetworkAgentInfo{network{111} ni{VPN CONNECTED extra: VPN:com.genymobile.gnirehtet} created=now}'
+    expect(parseGnirehtetVpnConnected(output)).toBe(true)
+  })
+
+  it('does not mistake a lingering Gnirehtet process for a connected VPN', () => {
+    expect(parseGnirehtetVpnConnected('2167 com.genymobile.gnirehtet')).toBe(false)
+    expect(parseGnirehtetVpnConnected('VPN DISCONNECTED extra: VPN:com.genymobile.gnirehtet')).toBe(false)
+  })
+
+  it('does not treat another application VPN or a stale network as Gnirehtet', () => {
+    expect(parseGnirehtetVpnConnected('VPN CONNECTED extra: VPN:com.other.provider')).toBe(false)
+    expect(parseGnirehtetVpnConnected('VPN CONNECTING extra: VPN:com.genymobile.gnirehtet')).toBe(false)
   })
 })
 
