@@ -84,6 +84,7 @@ function App(): React.JSX.Element {
                   onClearLogs={clearLogs}
                   diagnostics={diagnostics}
                   t={t}
+                  language={settings.language}
                 />
               )}
               {activePage === 'settings' && (
