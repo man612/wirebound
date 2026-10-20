@@ -562,7 +562,12 @@ export default function Dashboard({
               <span className="ml-2 text-accent-red">{t.reportCopyFailed}</span>
             )}
           </div>
-          {diagnosticsVisible && <div id="wirebound-diagnostic-details">
+          {diagnostics.isRunning && (
+            <div aria-hidden="true" className="mt-2 h-0.5 overflow-hidden rounded-sm bg-bg-primary">
+              <div className="h-full w-1/3 bg-accent-blue motion-safe:animate-shimmer" />
+            </div>
+          )}
+          <div id="wirebound-diagnostic-details" hidden={!diagnosticsVisible}>
           {!diagnostics.report && !diagnostics.error && (
             <p className="mt-2 text-xs text-text-secondary">{t.diagnosticsIdle}</p>
           )}
@@ -630,7 +635,7 @@ export default function Dashboard({
               </p>
             </>
           )}
-          </div>}
+          </div>
         </div>
 
         <div>
