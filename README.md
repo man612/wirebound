@@ -82,6 +82,8 @@ npm run runtime:prepare
 npm run dev
 ```
 
+When hosted checks are unavailable, run the equivalent checks locally on Windows using `pwsh -NoProfile -File scripts/verify-local.ps1 -IncludePackage`. See [CI availability and local validation](./docs/CI_LOCAL_VALIDATION.md) for the quota distinction, failure triage, and safe alternatives.
+
 Useful verification commands:
 
 ```powershell

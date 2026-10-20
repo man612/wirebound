@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify runtime-watch pin parser
+        run: pwsh -NoProfile -File scripts/test-runtime-watch-pins.ps1
+
       - name: Prepare pinned runtime
         run: npm run runtime:prepare
 
