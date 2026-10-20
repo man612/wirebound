@@ -25,8 +25,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $script = Get-Content 'scripts/prepare-runtime.ps1' -Raw
 
-          $platformMatch = [regex]::Match($script, "\$PlatformToolsVersion\s*=\s*'([^']+)'")
-          $gnirehtetMatch = [regex]::Match($script, "\$GnirehtetVersion\s*=\s*'([^']+)'")
+          $platformMatch = [regex]::Match($script, '(?m)^\s*\$PlatformToolsVersion\s*=\s*''([^'']+)''')
+          $gnirehtetMatch = [regex]::Match($script, '(?m)^\s*\$GnirehtetVersion\s*=\s*''([^'']+)''')
           if (-not $platformMatch.Success -or -not $gnirehtetMatch.Success) {
             throw 'Could not read pinned runtime versions from scripts/prepare-runtime.ps1.'
           }
