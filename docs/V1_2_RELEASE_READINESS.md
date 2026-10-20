@@ -28,7 +28,8 @@ Observed test hardware:
 - Windows Electron packaged **unpacked executable** was built locally with electron-builder v26.15.3. This is NOT a signed installer.
 - The packaged wirebound.exe launched on an isolated QA user-data directory and showed the **Step 1/3 first-run onboarding**, language/theme controls, Electron IPC bridge and correct app version. This is stronger evidence than a project-directory Electron preview.
 - An earlier project preview intermittently displayed a blank renderer. A successful packaged launch does not prove the issue is resolved on every cold start. See https://github.com/man612/wirebound/issues/44 .
-- A full **NSIS installer installation/uninstallation** and repeated installed-app cold starts must be verified separately.
+- **NSIS installer test passed:** generated a 103.4 MiB one-click installer, installed silently into an isolated QA directory (exit code 0), launched the actual installed executable, verified first-run onboarding Step 1/3 and IPC, then uninstalled silently (exit code 0). The executable and uninstaller were removed. This test build is not a published v1.2 release.
+- Repeated cold starts on different user accounts and genuine tray-context-menu Quit remain unverified.
 
 ## CI and security
 
@@ -41,7 +42,7 @@ Observed test hardware:
 ## Release gates that still need decisions
 
 - [ ] Genuine **tray menu Quit** (not window close) terminates active relay and removes device VPN and ADB mapping
-- [ ] Clean NSIS installer install/uninstall on isolated Windows testing profile/VM; no unwanted side effects
+- [x] NSIS silent install/uninstall in isolated Windows QA directory, plus installed-executable onboarding and IPC smoke check (2026-10-20)
 - [ ] More cold starts of the packaged/installed executable; investigate #44 only if reproducible
 - [ ] USB disconnection/reconnection and revoked or unauthorized access behavior on the single available handset
 - [ ] Browser/network check with Wi-Fi/mobile-data isolated where safe and practical
