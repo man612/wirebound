@@ -499,20 +499,25 @@ export default function Dashboard({
 
         <div className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Stethoscope size={14} className="text-accent-blue" />
-              <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                {t.diagnostics}
+            <div className="flex min-w-0 items-center gap-2">
+              <Stethoscope size={14} className="shrink-0 text-accent-blue" />
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted">{t.diagnostics}</div>
+                {diagnostics.report && (
+                  <p className="mt-0.5 text-[10px] text-text-secondary">
+                    {diagnostics.report.checks.filter((check) => check.status === 'pass').length}/{diagnostics.report.checks.length} {t.diagnosticsPassed}
+                  </p>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
               <button
                 onClick={() => void handleCopyDiagnostics()}
-                disabled={!diagnostics.report}
+                disabled={!diagnostics.report || copyState === 'copying'}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <ClipboardCopy size={12} />
-                {reportCopied ? t.reportCopied : t.copyReport}
+                {copyState === 'success' ? <CheckCircle2 size={12} /> : <ClipboardCopy size={12} />}
+                {copyState === 'copying' ? t.copyingReport : copyState === 'success' ? t.reportCopied : t.copyReport}
               </button>
               <button
                 onClick={() => void handleExportDiagnostics()}
@@ -523,16 +528,37 @@ export default function Dashboard({
                 {reportExported ? t.reportExported : t.exportReport}
               </button>
               <button
-                onClick={() => void diagnostics.run()}
+                onClick={() => void handleRerunDiagnostics()}
                 disabled={diagnostics.isRunning}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-accent-blue/30 bg-accent-blue/10 px-2.5 py-1 text-[10px] font-semibold text-accent-blue transition-colors hover:bg-accent-blue/15 disabled:opacity-50"
               >
                 <RefreshCw size={12} className={diagnostics.isRunning ? 'animate-spin' : ''} />
                 {diagnostics.report ? t.rerunDiagnostics : t.runDiagnostics}
               </button>
+              <button type="button" onClick={handleToggleDiagnostics}
+                aria-expanded={diagnosticsExpanded} aria-controls="wirebound-diagnostic-details"
+                className="inline-flex items-center gap-1 rounded-sm border border-border-subtle bg-bg-primary px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
+                {diagnosticsExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                {diagnosticsExpanded ? t.diagnosticsHide : t.diagnosticsShow}
+              </button>
             </div>
           </div>
 
+          <div role="status" aria-live="polite" aria-atomic="true" className="mt-1 text-[11px] text-text-secondary">
+            {diagnostics.isRunning || diagnosticsFeedback === 'running' ? (
+              <span className="inline-flex items-center gap-1.5 text-accent-blue">
+                <RefreshCw size={12} className="motion-safe:animate-spin" /> {t.diagnosticsChecking}
+              </span>
+            ) : diagnosticsFeedback === 'finished' ? t.diagnosticsFinished
+              : diagnosticsFeedback === 'failed' ? t.diagnosticsFailed : null}
+            {copyState === 'success' && (
+              <span className="ml-2 inline-flex items-center gap-1 text-accent-green"><CheckCircle2 size={12} />{t.reportCopySuccess}</span>
+            )}
+            {copyState === 'error' && (
+              <span className="ml-2 text-accent-red">{t.reportCopyFailed}</span>
+            )}
+          </div>
+          {diagnosticsExpanded && <div id="wirebound-diagnostic-details">
           {!diagnostics.report && !diagnostics.error && (
             <p className="mt-2 text-xs text-text-secondary">{t.diagnosticsIdle}</p>
           )}
@@ -543,7 +569,7 @@ export default function Dashboard({
           )}
           {diagnostics.report && (
             <>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <div className={`mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3 ${diagnostics.isRunning ? 'opacity-65' : ''}`}>
                 {diagnostics.report.checks.map((check) => (
                   <div
                     key={check.id}
@@ -580,16 +606,15 @@ export default function Dashboard({
                     {t.diagnosticDevices}
                   </div>
                   {diagnostics.report.devices.map((device) => (
-                    <div
-                      key={device.id}
-                      className="text-[10px] leading-relaxed text-text-secondary"
-                    >
-                      <span className="font-semibold text-text-primary">{device.name}</span> Â·{' '}
-                      {device.id} Â· {getDeviceStatusLabel(device.status, t)}
-                      {device.androidVersion &&
-                        ` Â· Android ${device.androidVersion} / API ${device.apiLevel ?? '?'}`}
-                      {device.status === 'device' &&
-                        ` Â· ${t.gnirehtetInstalled}: ${device.gnirehtetInstalled ? t.yes : t.no} Â· ${t.gnirehtetActive}: ${device.gnirehtetActive ? t.yes : t.no}`}
+                    <div key={device.id} className="mt-2 rounded-sm border border-border-subtle bg-bg-primary p-2.5">
+                      <div className="break-words text-xs font-semibold text-text-primary">{device.name || '--'}</div>
+                      <div className="mt-2 grid gap-x-4 gap-y-1 text-[11px] text-text-secondary sm:grid-cols-2 xl:grid-cols-3">
+                        <div><span className="text-text-muted">{t.deviceId}:</span> <span className="break-all font-mono">{maskDeviceId(device.id)}</span></div>
+                        <div><span className="text-text-muted">{t.deviceStatus}:</span> {getDeviceStatusLabel(device.status, t)}</div>
+                        <div><span className="text-text-muted">{t.diagAndroidVersion}:</span> {device.androidVersion ? `Android ${device.androidVersion} / API ${device.apiLevel ?? '?'}` : '--'}</div>
+                        <div><span className="text-text-muted">{t.gnirehtetInstalled}:</span> {device.status === 'device' ? device.gnirehtetInstalled ? t.yes : t.no : '--'}</div>
+                        <div><span className="text-text-muted">{t.gnirehtetActive}:</span> {device.status === 'device' ? device.gnirehtetActive ? t.yes : t.no : '--'}</div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -597,10 +622,11 @@ export default function Dashboard({
 
               <p className="mt-2 text-[9px] text-text-muted">
                 {t.diagnosticsGenerated}:{' '}
-                {new Date(diagnostics.report.generatedAt).toLocaleString()}
+                {formatUiTimestamp(diagnostics.report.generatedAt, language)}
               </p>
             </>
           )}
+          </div>}
         </div>
 
         <div>
