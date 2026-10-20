@@ -4,6 +4,9 @@ import {
   Battery,
   CheckCircle2,
   ClipboardCopy,
+  ChevronDown,
+  ChevronRight,
+  X,
   Download,
   Laptop,
   Link2,
@@ -26,7 +29,8 @@ import type {
   DeviceTunnelStatus,
   LogEntry
 } from '../../../../shared/types'
-import type { Translation } from '../../i18n'
+import type { Language, Translation } from '../../i18n'
+import { formatUiTimestamp, maskDeviceId } from '../../formatters'
 
 interface DashboardProps {
   status: ConnectionStatus
@@ -44,6 +48,7 @@ interface DashboardProps {
     run: () => Promise<void>
   }
   t: Translation
+  language: Language
 }
 
 interface DeviceSetupState {
@@ -209,7 +214,7 @@ function formatDiagnosticReport(report: DiagnosticReport): string {
     lines.push('', 'Devices:')
     for (const device of report.devices) {
       lines.push(
-        `- ${device.name} (${device.id}) | ${device.status} | Android ${device.androidVersion ?? '?'} / API ${device.apiLevel ?? '?'} | Gnirehtet installed: ${device.gnirehtetInstalled ? 'yes' : 'no'} | client active: ${device.gnirehtetActive ? 'yes' : 'no'}`
+        `- ${device.name} (${maskDeviceId(device.id)}) | ${device.status} | Android ${device.androidVersion ?? '?'} / API ${device.apiLevel ?? '?'} | Gnirehtet installed: ${device.gnirehtetInstalled ? 'yes' : 'no'} | client active: ${device.gnirehtetActive ? 'yes' : 'no'}`
       )
     }
   }
@@ -227,32 +232,118 @@ export default function Dashboard({
   logs,
   onClearLogs,
   diagnostics,
-  t
+  t,
+  language
 }: DashboardProps): React.JSX.Element {
   const isRunning = status === 'connected'
   const isConnecting = status === 'connecting'
   const isError = status === 'error'
   const setupState = getDeviceSetupState(devices, status, adbError, t)
   const SetupIcon = setupState.icon
-  const logEndRef = useRef<HTMLDivElement>(null)
-  const [reportCopied, setReportCopied] = useState(false)
+  const logViewportRef = useRef<HTMLDivElement>(null)
+  const logPinnedToBottomRef = useRef(true)
+  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const manuallyToggledRef = useRef(false)
+  const rerunLockRef = useRef(false)
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(true)
+  const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | null>(null)
+  const [rerunCycle, setRerunCycle] = useState(0)
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
   const [reportExported, setReportExported] = useState(false)
   const [deviceActionId, setDeviceActionId] = useState<string>()
+  const [readyDismissed, setReadyDismissed] = useState(false)
+
+  // Initial reveal is brief. Manual toggle is authoritative and cancels automation.
+  useEffect(() => {
+    collapseTimerRef.current = window.setTimeout(() => {
+      if (!manuallyToggledRef.current) setDiagnosticsExpanded(false)
+      collapseTimerRef.current = null
+    }, 2600)
+    return () => {
+      if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (setupState.tone !== 'ready') setReadyDismissed(false)
+  }, [setupState.tone])
+
+  useEffect(() => {
+    // A failed scan stays visible, including one that completed after the initial reveal.
+    if (diagnostics.error && !diagnostics.isRunning) {
+      if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+      collapseTimerRef.current = null
+      setDiagnosticsExpanded(true)
+    }
+  }, [diagnostics.error, diagnostics.isRunning])
+
+  useEffect(() => {
+    if (rerunCycle === 0) return
+    const failed = Boolean(diagnostics.error)
+    setDiagnosticsFeedback(failed ? 'failed' : 'finished')
+    if (!failed && !manuallyToggledRef.current) {
+      if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+      collapseTimerRef.current = window.setTimeout(() => {
+        if (!manuallyToggledRef.current) setDiagnosticsExpanded(false)
+        collapseTimerRef.current = null
+      }, 2600)
+    }
+  }, [rerunCycle, diagnostics.error])
+
+  // Scroll only the terminal viewport, never its ancestor dashboard.
+  useEffect(() => {
+    const viewport = logViewportRef.current
+    if (viewport && logPinnedToBottomRef.current) viewport.scrollTop = viewport.scrollHeight
   }, [logs])
 
-  const handleCopyDiagnostics = async (): Promise<void> => {
-    if (!diagnostics.report) return
+  const handleLogScroll = (): void => {
+    const viewport = logViewportRef.current
+    if (!viewport) return
+    logPinnedToBottomRef.current =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 28
+  }
 
+  const handleToggleDiagnostics = (): void => {
+    manuallyToggledRef.current = true
+    if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+    collapseTimerRef.current = null
+    setDiagnosticsExpanded((previous) => !previous)
+  }
+
+  const handleRerunDiagnostics = async (): Promise<void> => {
+    if (rerunLockRef.current || diagnostics.isRunning) return
+    rerunLockRef.current = true
+    manuallyToggledRef.current = false
+    if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+    collapseTimerRef.current = null
+    setDiagnosticsExpanded(true)
+    setDiagnosticsFeedback('running')
+    try {
+      await diagnostics.run()
+    } finally {
+      // useDiagnostics resolves after it publishes the real result or error.
+      setRerunCycle((previous) => previous + 1)
+      rerunLockRef.current = false
+    }
+  }
+
+  const handleCopyDiagnostics = async (): Promise<void> => {
+    if (!diagnostics.report || copyState === 'copying') return
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
+    setCopyState('copying')
     try {
       await navigator.clipboard.writeText(formatDiagnosticReport(diagnostics.report))
-      setReportCopied(true)
-      window.setTimeout(() => setReportCopied(false), 1500)
+      setCopyState('success')
     } catch (error) {
       console.warn('Failed to copy diagnostic report.', error)
+      setCopyState('error')
     }
+    copyTimerRef.current = window.setTimeout(() => {
+      setCopyState('idle')
+      copyTimerRef.current = null
+    }, 2600)
   }
 
   const handleExportDiagnostics = async (): Promise<void> => {
@@ -371,8 +462,8 @@ export default function Dashboard({
           </div>
         </div>
 
-        <div
-          className={`flex items-start gap-3 rounded-sm border p-3 theme-transition ${
+        {(!readyDismissed || setupState.tone !== 'ready') && <div
+          className={`flex items-center gap-2 rounded-sm border px-3 py-2 theme-transition ${
             setupState.tone === 'active' || setupState.tone === 'ready'
               ? 'border-accent-green/30 bg-accent-green-dim/40 dark:bg-accent-green-dim/20'
               : setupState.tone === 'error'
@@ -381,8 +472,8 @@ export default function Dashboard({
           }`}
         >
           <SetupIcon
-            size={18}
-            className={`mt-0.5 shrink-0 ${
+            size={16}
+            className={`shrink-0 ${
               setupState.tone === 'active' || setupState.tone === 'ready'
                 ? 'text-accent-green'
                 : setupState.tone === 'error'
@@ -390,16 +481,21 @@ export default function Dashboard({
                   : 'text-accent-yellow'
             }`}
           />
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-text-primary">{setupState.title}</div>
-            <p className="mt-1 text-xs leading-relaxed text-text-secondary">
-              {setupState.description}
-            </p>
+          <div className="min-w-0 flex-1 text-xs">
+            <span className="font-semibold text-text-primary">{setupState.title}</span>
+            <span className="ml-2 text-text-secondary">{setupState.description}</span>
             {adbError && (
               <p className="mt-1 break-all font-mono text-[10px] text-accent-red/80">{adbError}</p>
             )}
           </div>
-        </div>
+          {setupState.tone === 'ready' && (
+            <button type="button" onClick={() => setReadyDismissed(true)}
+              aria-label={t.dismissNotice}
+              className="ml-auto shrink-0 rounded-sm p-1 text-text-muted hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
+              <X size={14} />
+            </button>
+          )}
+        </div>}
 
         <div className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
           <div className="flex items-center justify-between gap-3">
@@ -668,12 +764,14 @@ export default function Dashboard({
             </div>
             <button
               onClick={onClearLogs}
-              className="text-[10px] font-bold uppercase text-text-muted transition-colors hover:text-accent-red"
+              disabled={logs.length === 0}
+              title={logs.length === 0 ? t.noLogsToClear : t.clear}
+              className="text-[10px] font-bold uppercase text-text-muted transition-colors hover:text-accent-red disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-muted"
             >
               {t.clear}
             </button>
           </div>
-          <div className="custom-scrollbar h-48 overflow-y-auto rounded-sm border border-border-subtle bg-bg-primary p-3 font-mono text-[10px]">
+          <div ref={logViewportRef} onScroll={handleLogScroll} className="custom-scrollbar h-48 overflow-y-auto rounded-sm border border-border-subtle bg-bg-primary p-3 font-mono text-[10px]">
             {logs.length === 0 ? (
               <div className="flex h-full items-center justify-center text-text-muted italic">
                 {t.noLogsYet}
@@ -689,7 +787,7 @@ export default function Dashboard({
                     <span className="break-all">{log.message}</span>
                   </div>
                 ))}
-                <div ref={logEndRef} />
+
               </div>
             )}
           </div>
