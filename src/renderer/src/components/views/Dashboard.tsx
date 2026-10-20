@@ -246,6 +246,7 @@ export default function Dashboard({
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const manuallyToggledRef = useRef(false)
   const rerunLockRef = useRef(false)
+  const acknowledgedRerunRef = useRef(0)
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(true)
   const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | null>(null)
   const [rerunCycle, setRerunCycle] = useState(0)
@@ -280,7 +281,8 @@ export default function Dashboard({
   }, [diagnostics.error, diagnostics.isRunning])
 
   useEffect(() => {
-    if (rerunCycle === 0) return
+    if (rerunCycle === 0 || acknowledgedRerunRef.current === rerunCycle) return
+    acknowledgedRerunRef.current = rerunCycle
     const failed = Boolean(diagnostics.error)
     setDiagnosticsFeedback(failed ? 'failed' : 'finished')
     if (!failed && !manuallyToggledRef.current) {
@@ -514,6 +516,7 @@ export default function Dashboard({
               <button
                 onClick={() => void handleCopyDiagnostics()}
                 disabled={!diagnostics.report || copyState === 'copying'}
+                title={t.copyReportHelp}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {copyState === 'success' ? <CheckCircle2 size={12} /> : <ClipboardCopy size={12} />}
@@ -532,7 +535,7 @@ export default function Dashboard({
                 disabled={diagnostics.isRunning}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-accent-blue/30 bg-accent-blue/10 px-2.5 py-1 text-[10px] font-semibold text-accent-blue transition-colors hover:bg-accent-blue/15 disabled:opacity-50"
               >
-                <RefreshCw size={12} className={diagnostics.isRunning ? 'animate-spin' : ''} />
+                <RefreshCw size={12} className={diagnostics.isRunning ? 'motion-safe:animate-spin' : ''} />
                 {diagnostics.report ? t.rerunDiagnostics : t.runDiagnostics}
               </button>
               <button type="button" onClick={handleToggleDiagnostics}
