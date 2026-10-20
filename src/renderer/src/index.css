@@ -203,3 +203,23 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--accent-blue);
 }
+
+/* Avoid non-essential movement for people requesting reduced motion in Windows. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up,
+  .animate-scale-in,
+  .animate-float,
+  .animate-shimmer,
+  .animate-page-enter,
+  .animate-dropdown,
+  .animate-modal-enter,
+  .animate-spin {
+    animation: none !important;
+  }
+
+  .theme-transition,
+  .state-morph,
+  .liquid-path {
+    transition: none !important;
+  }
+}
