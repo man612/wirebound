@@ -643,138 +643,62 @@ export default function Dashboard({
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-sm border border-border-subtle bg-bg-surface theme-transition">
-            <table className="w-full min-w-[920px] border-collapse text-left text-xs">
-              <thead className="border-b border-border-subtle bg-bg-primary">
-                <tr>
-                  <th className="w-28 px-3 py-2 font-semibold text-text-muted">{t.deviceStatus}</th>
-                  <th className="w-28 px-3 py-2 font-semibold text-text-muted">{t.tunnelStatus}</th>
-                  <th className="px-3 py-2 font-semibold text-text-muted">{t.deviceId}</th>
-                  <th className="px-3 py-2 font-semibold text-text-muted">{t.model}</th>
-                  <th className="w-24 px-3 py-2 font-semibold text-text-muted">{t.power}</th>
-                  <th className="w-40 px-3 py-2 font-semibold text-text-muted">{t.traffic}</th>
-                  <th className="w-56 px-3 py-2 text-right font-semibold text-text-muted">
-                    {t.actions}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.map((device) => (
-                  <tr
-                    key={device.id}
-                    className="group border-b border-border-subtle/50 transition-colors hover:bg-bg-primary"
-                  >
-                    <td className="px-3 py-1.5">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-semibold ${
-                          device.status === 'device'
-                            ? 'border-accent-green/30 bg-accent-green-dim/40 text-accent-green'
-                            : device.status === 'unauthorized' || device.status === 'no permissions'
-                              ? 'border-accent-red/30 bg-accent-red-dim/40 text-accent-red'
-                              : 'border-accent-yellow/30 bg-amber-50 text-amber-700 dark:bg-yellow-950/20 dark:text-accent-yellow'
-                        }`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            device.status === 'device'
-                              ? 'bg-accent-green'
-                              : device.status === 'unauthorized' ||
-                                  device.status === 'no permissions'
-                                ? 'bg-accent-red'
-                                : 'bg-accent-yellow'
-                          }`}
-                        />
-                        {getDeviceStatusLabel(device.status, t)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-semibold ${getTunnelStatusClass(device.tunnelStatus)}`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            device.tunnelStatus === 'connected'
-                              ? 'bg-accent-green'
-                              : device.tunnelStatus === 'waiting'
-                                ? 'bg-accent-yellow'
-                                : device.tunnelStatus === 'error'
-                                  ? 'bg-accent-red'
-                                  : 'bg-text-muted'
-                          }`}
-                        />
-                        {getTunnelStatusLabel(device.tunnelStatus, t)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5 font-mono text-text-muted">{device.id}</td>
-                    <td className="px-3 py-1.5 font-medium text-text-primary transition-colors group-hover:text-accent-blue">
-                      {device.name || 'Unknown'}
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center gap-1 text-text-muted">
-                        <Battery size={12} />
-                        {device.battery ? `${device.battery}%` : '--'}
-                      </div>
-                    </td>
-                    <td
-                      className="px-3 py-1.5 font-mono text-[10px] text-text-secondary"
-                      title={
-                        device.traffic
-                          ? `${device.traffic.interfaceName} kernel counters`
-                          : t.trafficUnavailable
-                      }
-                    >
-                      <div className="whitespace-nowrap">
-                        <span className="text-text-muted">RX</span>{' '}
-                        {formatBytes(device.traffic?.rxBytes)}
-                      </div>
-                      <div className="whitespace-nowrap">
-                        <span className="text-text-muted">TX</span>{' '}
-                        {formatBytes(device.traffic?.txBytes)}
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => void handleDeviceTunnelAction(device)}
-                          disabled={
-                            device.status !== 'device' ||
-                            (!isRunning && !isConnecting) ||
-                            deviceActionId === device.id
-                          }
-                          className={`inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[10px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
-                            device.tunnelStatus === 'connected'
-                              ? 'border-accent-red/30 bg-accent-red-dim/20 text-accent-red hover:bg-accent-red-dim/40'
-                              : 'border-accent-blue/30 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/15'
-                          }`}
-                        >
-                          {device.tunnelStatus === 'connected' ? (
-                            <Unplug size={12} />
-                          ) : (
-                            <Link2 size={12} />
-                          )}
-                          {deviceActionId === device.id
-                            ? t.deviceActionWorking
-                            : device.tunnelStatus === 'connected'
-                              ? t.disconnectDevice
-                              : t.retryDevice}
-                        </button>
-                        <button
-                          onClick={() => handleOpenDeviceSpeedTest(device.id)}
-                          disabled={device.tunnelStatus !== 'connected'}
-                          className="group/btn inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-all hover:border-accent-blue/50 hover:bg-accent-blue/10 hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <Zap
-                            size={12}
-                            className="text-text-muted transition-transform group-hover/btn:scale-110"
-                          />
-                          {t.testDeviceSpeed}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            {devices.map((device) => (
+              <article key={device.id} className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="break-words text-xs font-semibold text-text-primary">{device.name || 'Unknown'}</h3>
+                    <p className="mt-1 break-all font-mono text-[10px] text-text-muted">
+                      {t.deviceId}: {maskDeviceId(device.id)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={'inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-semibold ' +
+                      (device.status === 'device'
+                        ? 'border-accent-green/30 bg-accent-green-dim/40 text-accent-green'
+                        : device.status === 'unauthorized' || device.status === 'no permissions'
+                          ? 'border-accent-red/30 bg-accent-red-dim/40 text-accent-red'
+                          : 'border-accent-yellow/30 bg-amber-50 text-amber-700 dark:bg-yellow-950/20 dark:text-accent-yellow')}>
+                      {t.deviceStatus}: {getDeviceStatusLabel(device.status, t)}
+                    </span>
+                    <span className={'inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-semibold ' +
+                      getTunnelStatusClass(device.tunnelStatus)}>
+                      {t.tunnelStatus}: {getTunnelStatusLabel(device.tunnelStatus, t)}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-2">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-secondary">
+                    <span className="inline-flex items-center gap-1"><Battery size={12} />
+                      {t.power}: {device.battery !== undefined && device.battery !== '' ? device.battery + '%' : '--'}
+                    </span>
+                    <span title={device.traffic ? device.traffic.interfaceName + ' kernel counters' : t.trafficUnavailable}
+                      className="font-mono">
+                      RX {formatBytes(device.traffic?.rxBytes)} / TX {formatBytes(device.traffic?.txBytes)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button type="button" onClick={() => void handleDeviceTunnelAction(device)}
+                      disabled={device.status !== 'device' || (!isRunning && !isConnecting) || deviceActionId === device.id}
+                      className={'inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:cursor-not-allowed disabled:opacity-40 ' +
+                        (device.tunnelStatus === 'connected'
+                          ? 'border-accent-red/30 bg-accent-red-dim/20 text-accent-red hover:bg-accent-red-dim/40'
+                          : 'border-accent-blue/30 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/15')}>
+                      {device.tunnelStatus === 'connected' ? <Unplug size={12} /> : <Link2 size={12} />}
+                      {deviceActionId === device.id ? t.deviceActionWorking
+                        : device.tunnelStatus === 'connected' ? t.disconnectDevice : t.retryDevice}
+                    </button>
+                    <button type="button" onClick={() => handleOpenDeviceSpeedTest(device.id)}
+                      disabled={device.tunnelStatus !== 'connected'}
+                      className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:border-accent-blue/50 hover:text-accent-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:cursor-not-allowed disabled:opacity-40">
+                      <Zap size={12} />
+                      {t.testDeviceSpeed}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
             {devices.length === 0 && (
               <div className="p-4 text-center text-xs text-text-muted">
                 {adbError ? t.adbUnavailable : t.noDevice}
