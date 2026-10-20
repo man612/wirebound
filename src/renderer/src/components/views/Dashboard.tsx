@@ -242,8 +242,8 @@ export default function Dashboard({
   const SetupIcon = setupState.icon
   const logViewportRef = useRef<HTMLDivElement>(null)
   const logPinnedToBottomRef = useRef(true)
-  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const collapseTimerRef = useRef<number | null>(null)
+  const copyTimerRef = useRef<number | null>(null)
   const manuallyToggledRef = useRef(false)
   const rerunLockRef = useRef(false)
   const acknowledgedRerunRef = useRef(0)
