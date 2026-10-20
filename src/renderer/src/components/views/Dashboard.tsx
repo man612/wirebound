@@ -248,6 +248,7 @@ export default function Dashboard({
   const rerunLockRef = useRef(false)
   const acknowledgedRerunRef = useRef(0)
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(true)
+  const [diagnosticsManuallyToggled, setDiagnosticsManuallyToggled] = useState(false)
   const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | null>(null)
   const [rerunCycle, setRerunCycle] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
@@ -255,7 +256,7 @@ export default function Dashboard({
   const [deviceActionId, setDeviceActionId] = useState<string>()
   const [readyDismissed, setReadyDismissed] = useState(false)
   const diagnosticsVisible =
-    diagnosticsExpanded || (Boolean(diagnostics.error) && !manuallyToggledRef.current)
+    diagnosticsExpanded || (Boolean(diagnostics.error) && !diagnosticsManuallyToggled)
 
   // Initial reveal is brief. Manual toggle is authoritative and cancels automation.
   useEffect(() => {
@@ -306,6 +307,7 @@ export default function Dashboard({
 
   const handleToggleDiagnostics = (): void => {
     manuallyToggledRef.current = true
+    setDiagnosticsManuallyToggled(true)
     if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
     collapseTimerRef.current = null
     setDiagnosticsExpanded(!diagnosticsVisible)
@@ -315,6 +317,7 @@ export default function Dashboard({
     if (rerunLockRef.current || diagnostics.isRunning) return
     rerunLockRef.current = true
     manuallyToggledRef.current = false
+    setDiagnosticsManuallyToggled(false)
     if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
     collapseTimerRef.current = null
     setDiagnosticsExpanded(true)
