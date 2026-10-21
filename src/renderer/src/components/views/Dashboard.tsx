@@ -247,6 +247,7 @@ export default function Dashboard({
   const manuallyToggledRef = useRef(false)
   const rerunLockRef = useRef(false)
   const acknowledgedRerunRef = useRef(0)
+  const initialRevealScheduledRef = useRef(false)
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(true)
   const [diagnosticsManuallyToggled, setDiagnosticsManuallyToggled] = useState(false)
   const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | null>(null)
@@ -258,16 +259,35 @@ export default function Dashboard({
   const diagnosticsVisible =
     diagnosticsExpanded || (Boolean(diagnostics.error) && !diagnosticsManuallyToggled)
 
-  // Initial reveal is brief. Manual toggle is authoritative and cancels automation.
+  // A returning user has no cached diagnostic report: perform one real scan.
+  // Never run it again on ordinary device polling or dashboard re-renders.
   useEffect(() => {
+    if (!diagnostics.report && !diagnostics.isRunning && !diagnostics.error) {
+      void diagnostics.run()
+    }
+  }, [diagnostics.report, diagnostics.isRunning, diagnostics.error, diagnostics.run])
+
+  // Start the brief reveal AFTER the real scan finishes, not while it is pending.
+  // A failed scan stays visible; user-driven disclosure always wins.
+  useEffect(() => {
+    if (
+      initialRevealScheduledRef.current ||
+      diagnostics.isRunning ||
+      (!diagnostics.report && !diagnostics.error)
+    ) return
+
+    initialRevealScheduledRef.current = true
+    if (diagnostics.error || manuallyToggledRef.current) return
+
     collapseTimerRef.current = window.setTimeout(() => {
       if (!manuallyToggledRef.current) setDiagnosticsExpanded(false)
       collapseTimerRef.current = null
     }, 2600)
-    return () => {
-      if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
-      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
-    }
+  }, [diagnostics.report, diagnostics.isRunning, diagnostics.error])
+
+  useEffect(() => () => {
+    if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
   }, [])
 
   useEffect(() => {

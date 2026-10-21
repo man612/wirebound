@@ -201,20 +201,26 @@ export function useDiagnostics(): UseDiagnosticsResult {
   const [report, setReport] = useState<DiagnosticReport | undefined>()
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  const runInFlightRef = useRef(false)
 
   const run = useCallback(async (): Promise<void> => {
+    if (runInFlightRef.current) return
     if (!hasApi()) {
       setError('Electron API is not available.')
       return
     }
 
+    runInFlightRef.current = true
     setIsRunning(true)
     setError(undefined)
+    // Do not present an older successful scan as the result of a failed rerun.
+    setReport(undefined)
     try {
       setReport(await window.api.getDiagnostics())
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : 'Diagnostics failed.')
     } finally {
+      runInFlightRef.current = false
       setIsRunning(false)
     }
   }, [])
