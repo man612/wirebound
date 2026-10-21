@@ -173,7 +173,9 @@ function getSelectedDns(settings: AppSettings): string {
 
 function ensureServices(): { paths: RuntimePaths; adb: AdbService; engine: GnirehtetService } {
   if (!runtimePaths) {
+    traceStartup('runtime-paths-start')
     runtimePaths = getRuntimePaths()
+    traceStartup('runtime-paths-ready')
   }
 
   if (!adbService) {
@@ -190,8 +192,11 @@ function ensureServices(): { paths: RuntimePaths; adb: AdbService; engine: Gnire
 async function bootstrap(): Promise<void> {
   traceStartup('bootstrap-start')
   const { paths, adb, engine } = ensureServices()
+  traceStartup('settings-load-start')
   const settings = loadSettings()
+  traceStartup('settings-load-ready')
   applyCrashUploadConsent(settings.telemetryEnabled)
+  traceStartup('crash-consent-applied')
 
   mainWindow = createMainWindow(paths)
   traceStartup('bootstrap-window-created')

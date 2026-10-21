@@ -12,7 +12,9 @@ Set `WIREBOUND_QA_STARTUP_TRACE` to an **absolute** path before launching the Wi
 
 The trace does **not** record device serials, connection traffic, user settings, URLs, file paths, DOM text, or IPC payloads. If writing the trace fails, normal application startup is unaffected. The instrumentation does not auto-reload the renderer.
 
-Key events: `main-module-start`, `single-instance-lock`, `app-when-ready`, `window-created`, `renderer-load-requested`, `did-start-loading`, `dom-ready`, `did-finish-load`, `renderer-load-resolved`, `ready-to-show`, `window-shown`, `renderer-root-probe`, `did-fail-load`, `renderer-load-rejected`, `render-process-gone` and `bootstrap-rejected`.
+Key events: `runtime-paths-start`, `runtime-paths-ready`, `adb-cache-fingerprint-start`, `adb-cache-fingerprint-ready`, `adb-cache-verify-start`, `adb-cache-verify-ready` (with number of files copied only), `settings-load-start`, `settings-load-ready`, `main-module-start`, `single-instance-lock`, `app-when-ready`, `window-created`, `renderer-load-requested`, `did-start-loading`, `dom-ready`, `did-finish-load`, `renderer-load-resolved`, `ready-to-show`, `window-shown`, `renderer-root-probe`, `did-fail-load`, `renderer-load-rejected`, `render-process-gone` and `bootstrap-rejected`.
+
+**Further slow-path hypothesis:** before creating the BrowserWindow, Wirebound performs synchronous hashing, verification, and possible copying of three bundled ADB runtime files into the profile-specific cache. The added trace milestones distinguish ADB fingerprinting, file verification/copy, settings loading, and BrowserWindow construction. This might affect first-launch disk latency but is **not established as the cause** of the intermittent timeout.
 
 ## Windows evidence gathered on 2026-10-21
 

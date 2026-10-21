@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { app } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { traceStartup } from './startupTrace'
 
 export interface RuntimePaths {
   root: string
@@ -38,21 +39,28 @@ function hashFiles(directory: string): string {
 
 function prepareAdbCache(sourceDir: string): string {
   try {
+    traceStartup('adb-cache-fingerprint-start')
     const fingerprint = hashFiles(sourceDir)
+    traceStartup('adb-cache-fingerprint-ready')
     const localRoot = process.env.LOCALAPPDATA ?? app.getPath('userData')
     const cacheDir = join(localRoot, 'Wirebound', 'runtime', `platform-tools-${fingerprint}`)
     mkdirSync(cacheDir, { recursive: true })
+    traceStartup('adb-cache-verify-start')
+    let copied = 0
 
     for (const filename of ADB_RUNTIME_FILES) {
       const source = join(sourceDir, filename)
       const destination = join(cacheDir, filename)
       if (!existsSync(destination) || hashFile(destination) !== hashFile(source)) {
         copyFileSync(source, destination)
+        copied += 1
       }
     }
 
+    traceStartup('adb-cache-verify-ready', { filesCopied: copied })
     return cacheDir
   } catch (error) {
+    traceStartup('adb-cache-fallback')
     console.warn('Wirebound: Failed to prepare the local ADB cache; using bundled runtime.', error)
     return sourceDir
   }
