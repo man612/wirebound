@@ -1,7 +1,7 @@
 param(
   [string] $ExePath = (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'dist\win-unpacked\wirebound.exe'),
   [ValidateRange(1, 20)] [int] $Attempts = 3,
-  [ValidateRange(5, 60)] [int] $WaitSeconds = 20,
+  [ValidateRange(5, 120)] [int] $WaitSeconds = 20,
   [string] $OutputRoot = (Join-Path ([System.IO.Path]::GetTempPath()) 'wirebound-cold-start-qa')
 )
 
