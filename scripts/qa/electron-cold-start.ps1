@@ -2,10 +2,13 @@ param(
   [string] $ExePath = (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'dist\win-unpacked\wirebound.exe'),
   [ValidateRange(1, 20)] [int] $Attempts = 3,
   [ValidateRange(5, 120)] [int] $WaitSeconds = 20,
-  [string] $OutputRoot = (Join-Path ([System.IO.Path]::GetTempPath()) 'wirebound-cold-start-qa')
+  [string] $OutputRoot = (Join-Path ([System.IO.Path]::GetTempPath()) 'wirebound-cold-start-qa'),
+  [switch] $ObserveResources,
+  [switch] $CountDefenderEvents
 )
 
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'startup-readiness.psm1') -Force -ErrorAction Stop
 $resolvedExe = (Resolve-Path -LiteralPath $ExePath).Path
 New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
 $failures = 0
@@ -23,6 +26,8 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
   $savedTrace = $env:WIREBOUND_QA_STARTUP_TRACE
   $child = $null
   $result = 'not-started'
+  $attemptStartedAt = Get-Date
+  $samples = [System.Collections.Generic.List[object]]::new()
   try {
     # Start-Process inherits these variables. No real settings profile is touched.
     $env:APPDATA = $appData
@@ -35,17 +40,33 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
 
     for ($step = 1; $step -le $WaitSeconds; $step++) {
       Start-Sleep -Seconds 1
+      if ($ObserveResources) {
+        # Observation is opt-in: sample only the child started by this harness
+        # and the Defender engine (if readable). No process lists, paths or usernames.
+        $qaProcess = Get-Process -Id $child.Id -ErrorAction SilentlyContinue
+        $defenderProcess = Get-Process -Name MsMpEng -ErrorAction SilentlyContinue | Select-Object -First 1
+        $samples.Add([pscustomobject]@{
+          elapsedSeconds = $step
+          qaCpuSeconds = if ($qaProcess) { [math]::Round([double]$qaProcess.CPU, 3) } else { $null }
+          qaWorkingSetMiB = if ($qaProcess) { [math]::Round($qaProcess.WorkingSet64 / 1MB, 1) } else { $null }
+          qaHandles = if ($qaProcess) { $qaProcess.Handles } else { $null }
+          defenderCpuSeconds = if ($defenderProcess) { [math]::Round([double]$defenderProcess.CPU, 3) } else { $null }
+        })
+      }
       if (Test-Path $timeline) {
         $events = @(Get-Content -LiteralPath $timeline -ErrorAction SilentlyContinue | ForEach-Object {
           try { $_ | ConvertFrom-Json } catch { $null }
         } | Where-Object { $null -ne $_ })
-        $root = @($events | Where-Object { $_.event -eq 'renderer-root-probe' } | Select-Object -Last 1)
-        if ($root.Count -gt 0 -and $root[-1].rootChildren -gt 0 -and $root[-1].visible) {
-          $result = 'pass'
+        $readiness = Get-WireboundStartupReadiness -Events $events
+        # DOM mounting and window visibility may happen in either order.
+        # A root probe made while the window is still hidden must not become
+        # a false timeout once 'window-shown' arrives afterward.
+        if ($readiness.failureRecorded) {
+          $result = 'startup-failure-recorded'
           break
         }
-        if (@($events | Where-Object { $_.event -in @('renderer-load-rejected', 'render-process-gone', 'bootstrap-rejected') }).Count -gt 0) {
-          $result = 'startup-failure-recorded'
+        if ($readiness.ready) {
+          $result = 'pass'
           break
         }
       }
@@ -69,6 +90,30 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
     $failures++
     Write-Output "ATTEMPT=$attempt ERROR=$($_.Exception.GetType().Name)"
   } finally {
+    if ($ObserveResources) {
+      try {
+        $samples | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $attemptDir 'process-samples.json') -Encoding utf8
+        Write-Output "  RESOURCE_SAMPLES=$($samples.Count)"
+      } catch {
+        Write-Output '  RESOURCE_SAMPLES_UNAVAILABLE'
+      }
+    }
+    if ($CountDefenderEvents) {
+      try {
+        # Aggregate IDs only, never persist Defender event descriptions or paths.
+        $counts = @(Get-WinEvent -FilterHashtable @{
+          LogName = 'Microsoft-Windows-Windows Defender/Operational'
+          StartTime = $attemptStartedAt
+          EndTime = Get-Date
+        } -MaxEvents 200 -ErrorAction SilentlyContinue | Group-Object Id | ForEach-Object {
+          [pscustomobject]@{ eventId = [int]$_.Name; count = $_.Count }
+        })
+        ConvertTo-Json -InputObject $counts -Depth 3 | Set-Content -LiteralPath (Join-Path $attemptDir 'defender-event-counts.json') -Encoding utf8
+        Write-Output "  DEFENDER_EVENT_TYPES=$($counts.Count)"
+      } catch {
+        Write-Output '  DEFENDER_EVENT_COUNTS_UNAVAILABLE'
+      }
+    }
     $env:APPDATA = $savedAppData
     $env:LOCALAPPDATA = $savedLocalAppData
     $env:WIREBOUND_QA_STARTUP_TRACE = $savedTrace

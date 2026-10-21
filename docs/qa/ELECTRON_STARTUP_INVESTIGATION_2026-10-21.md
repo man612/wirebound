@@ -31,12 +31,43 @@ Key events: `runtime-paths-start`, `runtime-paths-ready`, `adb-cache-fingerprint
 
 **Interpretation:** Startup behavior is intermittent: the same installed UX+trace build produced both 30-second timeouts and later sub-four-second successes, while the main+trace baseline also passes. A `startup-timed-out` observation is not evidence of a renderer crash or a permanent hang. Seek safe OS/Defender/process timing evidence or a controlled reproducible failure before proposing a targeted code fix. Do not close issue #44 or add an unconditional reload timer on this evidence alone.
 
+## Follow-up: corrected QA classification and OS observations (2026-10-21)
+
+Two subtle issues were found in the **QA harness**, not in Wirebound's connection services:
+
+1. A QA-only `renderer-root-probe` may report `rootChildren > 0` while `visible: false`, because React can mount **before** Electron emits `ready-to-show`/`window-shown`. The old harness required the single probe to have `visible: true` and never reconsidered it when the window showed later, producing a false timeout. In one unchanged UX+trace NSIS run, React had mounted at **4,034 ms** and the window showed at **12,693 ms**. Despite both conditions being met, the old runner reported a timeout at 45 seconds.
+2. The deliberate QA `taskkill /T /F` can append `render-process-gone` with `reason: killed` **after a successful startup**. Treating any such event anywhere in the saved timeline as an earlier crash also produces false negatives.
+
+The new `startup-readiness.psm1` evaluates **chronological first success versus first failure**: a populated React root **and** a `window-shown` event, in either order, must occur before a fatal startup event. After this, a cleanup kill cannot retrospectively fail startup. Run `pwsh -NoProfile -File scripts/qa/startup-readiness.test.ps1` for **8/8 passing synthetic sequence tests**. `summarize-startup-traces.ps1` can reclassify saved JSONL evidence without launching or modifying the application.
+
+### Measured Windows results
+
+| Installed local NSIS experiment | Old runner result | Corrected classification / observation |
+| --- | --- | --- |
+| Baseline `main` + trace, 6 new isolated attempts | 6/6 pass | **6/6 loaded React and displayed the window**. Slowest first start: show 13.568s, populated-root probe 15.571s; remaining starts showed in under 1 second. |
+| UX PR #50 + trace, 6 new isolated attempts | 5/6 pass, 1 timeout | **6/6 loaded React and displayed the window**. The timeout was the confirmed early-probe/late-show harness bug: root at 4.034s, show at 12.693s. |
+| UX PR #50 + trace, 3 more newly installed attempts using corrected harness (45-second cutoff) | Not applicable | **2/3 pass, 1 real not-ready-within-45s observation**. In that attempt, `window-created` appeared at 16.520s and `did-start-loading` at 20.644s, but there was still **no `dom-ready`, `window-shown`, or populated root** by the deadline. No `did-fail-load` or renderer crash event appeared before cutoff. The other two showed the window in under 0.7s. |
+
+The corrected tool distinguishes an actual **startup timeout** from a **permanent hang**: the script intentionally stops its own process at the configured deadline. It does not establish that the process could never eventually load if allowed to continue.
+
+### Microsoft Defender: observations, not attribution
+
+The Windows host reports Defender antimalware and real-time protection **enabled**; protections were never disabled or excluded. Optional `-ObserveResources` stores **only numeric** per-second QA process CPU/memory/handle counts and Defender engine cumulative CPU time. Optional `-CountDefenderEvents` stores **only event-ID totals**, not messages, file paths, user content, or antivirus detections.
+
+- During the first slower baseline sample (14 one-second observations), Defender's cumulative CPU time increased **6.34 CPU-seconds**; most fast baseline runs showed approximately **0.20–0.47 CPU-seconds** during their shorter three-sample observations.
+- The corrected-harness UX timeout (45 samples) showed an increase of **6.22 Defender CPU-seconds**, but **zero Defender operational events** occurred in that test window. This is not proof that Defender blocked the renderer. Comparing cumulative CPU deltas across different sampling durations is also confounded.
+- No Defender scan performance trace or security configuration change was performed. Microsoft's `New-MpPerformanceRecording` can produce an elevated ETL recording containing kernel and scanning activity (and potentially sensitive file paths); it is **not necessary** for this limited privacy-preserving QA. Official reference: https://learn.microsoft.com/en-us/defender-endpoint/performance-analyzer-reference
+
+**Updated conclusion:** the startup issue is genuinely **intermittent**, and earlier QA also contained an identifiable false-negative classification flaw. Both `main` and PR #50 exhibit slow startup observations, so these runs do not establish a regression caused by UX changes. Defender involvement, disk contention and the exact root cause remain **unproven**. Keep #44 open and avoid disabling protection, upgrading dependencies, or injecting blind reload loops.
+
 ## Reproduction (Windows QA)
 
 1. Run the existing `npm run package:check` script to create `dist/win-unpacked/wirebound.exe`. It does not install or publish anything.
 2. Run `pwsh -NoProfile -File scripts/qa/electron-cold-start.ps1 -Attempts 3 -WaitSeconds 25`.
 3. The harness uses a distinct temporary APPDATA and LOCALAPPDATA per attempt, preserving startup event traces under your system temporary folder in `wirebound-cold-start-qa`. It will terminate **only its own** executable process after confirming the executable path.
-4. Inspect each `startup.jsonl`; a passing attempt includes a `renderer-root-probe` with `rootChildren > 0` and `visible: true`. The script returns nonzero for failed attempts.
+4. Inspect each `startup.jsonl`; a passing attempt needs a `renderer-root-probe` with `rootChildren > 0` **and a `window-shown` event**, in either order, before any fatal startup event. The probe's own `visible` value can legitimately be false if the window shows later. The script returns nonzero for genuinely not-ready attempts.
+
+Optional monitoring: add `-ObserveResources -CountDefenderEvents` to the harness command to save only numeric QA/Defender process measurements and Defender event-ID totals. Run `pwsh -NoProfile -File scripts/qa/startup-readiness.test.ps1` to test the sequence classifier, and `pwsh -NoProfile -File scripts/qa/summarize-startup-traces.ps1 -OutputRoot QA_OUTPUT_DIRECTORY` to reclassify saved traces. No Defender event messages, paths or personal file data are recorded.
 
 These experiments do not automatically start tethering because fresh default settings have `autoStart: false`. ADB bootstrap may still inspect locally connected USB devices; the script never deliberately activates or disconnects their VPN.
 
