@@ -441,12 +441,12 @@ export default function Dashboard({
       </div>
 
       <div className="custom-scrollbar flex flex-col gap-4 overflow-y-auto p-4">
-        <div className="flex items-center justify-between rounded-sm border border-border-subtle bg-bg-primary p-4 theme-transition">
-          <div className="min-w-0 pr-4">
+        <div className="flex flex-col gap-3 rounded-sm border border-border-subtle bg-bg-primary p-4 theme-transition md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0 md:pr-4">
             <h2 className="text-sm font-semibold text-text-primary">Wirebound Engine</h2>
             <p className="mt-1 text-xs text-text-secondary">{t.onboardingDesc}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 md:shrink-0">
             <button
               onClick={handleOpenDesktopSpeedTest}
               className="group flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-surface px-3 py-1.5 text-xs text-text-secondary transition-all duration-200 hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus active:scale-[0.96]"
