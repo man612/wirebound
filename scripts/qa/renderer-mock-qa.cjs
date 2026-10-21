@@ -48,10 +48,10 @@ async function init(page, initialSettings) {
     getCrashTelemetryState:async()=>({available:false,uploadEnabled:false}),
     openExternal:async()=>({success:true}),
     testSpeedOnDevice:async()=>({success:true}),
-    startDeviceTunnel:async()=>({success:true}),
-    stopDeviceTunnel:async()=>({success:true}),
-    startGnirehtet:async()=>({success:true}),
-    stopGnirehtet:async()=>({success:true}),
+    startDeviceTunnel:async(id)=>{(mock.deviceStartCalls ||= []).push(id);if(mock.failNextDeviceAction){mock.failNextDeviceAction=false;return {success:false,error:'Synthetic device action failure'}}return {success:true}},
+    stopDeviceTunnel:async(id)=>{(mock.deviceStopCalls ||= []).push(id);return {success:true}},
+    startGnirehtet:async(dns,port)=>{mock.engineStart={dns,port};mock.statusListeners.forEach(fn=>fn('connected'));return {success:true}},
+    stopGnirehtet:async()=>{mock.engineStopped=true;mock.statusListeners.forEach(fn=>fn('disconnected'));return {success:true}},
     windowControl:()=>{}
    };
    window.__qaPushLog=(n=1)=>{
@@ -153,6 +153,47 @@ async function main(){
     await page.setViewport({width:1008,height:650,deviceScaleFactor:1});
     if(empty.cards!==0||!empty.text)throw Error(JSON.stringify(empty));
     return empty;
+  });
+  await test('Engine and per-device actions expose failure and retry recovery',async()=>{
+    await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Mulai Koneksi'))?.click());
+    await delay(200);
+    const engine=await page.evaluate(()=>window.__qa.engineStart);
+    if(engine?.dns!=='8.8.8.8'||engine?.port!=='31416')throw Error('Engine start not forwarded '+JSON.stringify(engine));
+
+    await page.evaluate(()=>{
+      window.__qa.failNextDeviceAction=true;
+      [...document.querySelectorAll('article button')].find(b=>b.textContent.includes('Coba Lagi'))?.click();
+    });
+    await delay(180);
+    const failed=await page.evaluate(()=>({
+      text:document.querySelector('article [role="alert"]')?.textContent.trim(),
+      callCount:window.__qa.deviceStartCalls?.length
+    }));
+    if(!failed.text?.includes('Gagal mengubah koneksi')||failed.callCount!==1)throw Error('Device action error invisible '+JSON.stringify(failed));
+
+    await page.evaluate(()=>[...document.querySelectorAll('article button')].find(b=>b.textContent.includes('Coba Lagi'))?.click());
+    await delay(180);
+    const retried=await page.evaluate(()=>({
+      alert:!!document.querySelector('article [role="alert"]'),
+      startCalls:window.__qa.deviceStartCalls?.length
+    }));
+    if(retried.alert||retried.startCalls!==2)throw Error('Retry did not clear action error '+JSON.stringify(retried));
+
+    await page.evaluate(()=>window.__qa.deviceListeners.forEach(fn=>fn({devices:[{
+      id:'FAKE1234SIMULATED',name:'Synthetic Android 15 Mock Device',status:'device',
+      battery:'75',tunnelStatus:'connected',traffic:{interfaceName:'tun0',rxBytes:1024000,txBytes:128000}
+    }]})));
+    await delay(120);
+    await page.evaluate(()=>[...document.querySelectorAll('article button')].find(b=>b.textContent.includes('Putuskan'))?.click());
+    await delay(140);
+    const disconnected=await page.evaluate(()=>window.__qa.deviceStopCalls||[]);
+    if(disconnected.length!==1||disconnected[0]!=='FAKE1234SIMULATED')throw Error('Disconnect not forwarded');
+
+    await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Hentikan Koneksi'))?.click());
+    await delay(120);
+    const stopped=await page.evaluate(()=>window.__qa.engineStopped);
+    if(!stopped)throw Error('Engine stop not forwarded');
+    return {engine,visibleError:true,retryClearedError:true,perDeviceStop:true,engineStopped:stopped};
   });
   await test('New terminal output does not move dashboard scroll',async()=>{
    await page.evaluate(()=>{const root=[...document.querySelectorAll('div')].find(el=>el.classList.contains('custom-scrollbar')&&el.classList.contains('overflow-y-auto')&&el.querySelector('#wirebound-diagnostic-details'));root.scrollTop=0;window.__qaPushLog(30)});

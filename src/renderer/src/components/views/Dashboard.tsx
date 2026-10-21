@@ -254,7 +254,9 @@ export default function Dashboard({
   const [rerunCycle, setRerunCycle] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
   const [reportExported, setReportExported] = useState(false)
-  const [deviceActionId, setDeviceActionId] = useState<string>()
+  const deviceActionLockRef = useRef<Set<string>>(new Set())
+  const [deviceActionIds, setDeviceActionIds] = useState<Set<string>>(() => new Set())
+  const [deviceActionErrors, setDeviceActionErrors] = useState<Record<string, boolean>>({})
   const [readyDismissed, setReadyDismissed] = useState(false)
   const diagnosticsVisible =
     diagnosticsExpanded || (Boolean(diagnostics.error) && !diagnosticsManuallyToggled)
@@ -388,7 +390,11 @@ export default function Dashboard({
   }
 
   const handleDeviceTunnelAction = async (device: AdbDevice): Promise<void> => {
-    setDeviceActionId(device.id)
+    if (deviceActionLockRef.current.has(device.id)) return
+    deviceActionLockRef.current.add(device.id)
+    setDeviceActionIds(new Set(deviceActionLockRef.current))
+    setDeviceActionErrors((previous) => ({ ...previous, [device.id]: false }))
+
     try {
       const result =
         device.tunnelStatus === 'connected'
@@ -396,10 +402,15 @@ export default function Dashboard({
           : await window.api.startDeviceTunnel(device.id)
 
       if (!result.success) {
-        console.warn('Per-device tethering action failed.', result.error)
+        // Show a localized error without exposing raw device identifiers from ADB messages.
+        console.warn('Per-device tethering action failed.')
+        setDeviceActionErrors((previous) => ({ ...previous, [device.id]: true }))
       }
+    } catch {
+      setDeviceActionErrors((previous) => ({ ...previous, [device.id]: true }))
     } finally {
-      setDeviceActionId(undefined)
+      deviceActionLockRef.current.delete(device.id)
+      setDeviceActionIds(new Set(deviceActionLockRef.current))
     }
   }
 
@@ -709,13 +720,13 @@ export default function Dashboard({
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <button type="button" onClick={() => void handleDeviceTunnelAction(device)}
-                      disabled={device.status !== 'device' || (!isRunning && !isConnecting) || deviceActionId === device.id}
+                      disabled={device.status !== 'device' || (!isRunning && !isConnecting) || deviceActionIds.has(device.id)}
                       className={'inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:cursor-not-allowed disabled:opacity-40 ' +
                         (device.tunnelStatus === 'connected'
                           ? 'border-accent-red/30 bg-accent-red-dim/20 text-accent-red hover:bg-accent-red-dim/40'
                           : 'border-accent-blue/30 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/15')}>
                       {device.tunnelStatus === 'connected' ? <Unplug size={12} /> : <Link2 size={12} />}
-                      {deviceActionId === device.id ? t.deviceActionWorking
+                      {deviceActionIds.has(device.id) ? t.deviceActionWorking
                         : device.tunnelStatus === 'connected' ? t.disconnectDevice : t.retryDevice}
                     </button>
                     <button type="button" onClick={() => handleOpenDeviceSpeedTest(device.id)}
@@ -726,6 +737,11 @@ export default function Dashboard({
                     </button>
                   </div>
                 </div>
+                {deviceActionErrors[device.id] && (
+                  <p role="alert" className="mt-2 text-[11px] text-accent-red">
+                    {t.deviceActionFailed}
+                  </p>
+                )}
               </article>
             ))}
             {devices.length === 0 && (

@@ -154,6 +154,7 @@ export const translations = {
     disconnectDevice: 'Disconnect',
     retryDevice: 'Retry',
     deviceActionWorking: 'Working...',
+    deviceActionFailed: 'Could not change this device connection. Please try again.',
     multiDeviceControlNote:
       'Per-device disconnect stays in effect while the device remains attached. Autorun may start it again after the device reconnects.',
 
@@ -325,6 +326,7 @@ export const translations = {
     disconnectDevice: 'Putuskan',
     retryDevice: 'Coba Lagi',
     deviceActionWorking: 'Memproses...',
+    deviceActionFailed: 'Gagal mengubah koneksi perangkat ini. Coba lagi.',
     multiDeviceControlNote:
       'Putus per perangkat tetap berlaku selama HP masih terpasang. Autorun dapat menyalakannya lagi setelah HP dicabut lalu disambungkan kembali.',
 

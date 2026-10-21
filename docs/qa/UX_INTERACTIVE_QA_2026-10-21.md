@@ -7,10 +7,10 @@
 - Windows 11, Node.js 24, production output from `npm run build` served over local HTTP to a headless Chromium instance.
 - `scripts/qa/renderer-mock-qa.cjs` injects a **synthetic** Electron preload API before React starts. No genuine USB serial, machine identity, local settings, telemetry or terminal data are used.
 - The harness exercises live DOM controls, actual React effects and timers, resize/layout, copy error paths, and temporary synthetic ADB/VPN/log events. It does **not** launch a packaged Electron executable or actually connect a phone.
-- Validation on the review checkout: `npm ci` succeeded without dependency upgrades; lint returned **0 errors** (231 formatting/hook warnings in the initial run); typecheck passed; **52/52 Vitest cases passed**; `npm run build` passed, including a repeat after the narrow-layout fix.
-- **17/17 interactive browser QA scenarios passed** after the narrow-layout fix. Browser result JSON and screenshots were produced locally with only fake device data.
+- Validation on the review checkout: `npm ci` succeeded without dependency upgrades; lint returned **0 errors** (231 formatter/hook warnings); typecheck passed; **52/52 Vitest cases passed**; `npm run build` and the Windows `npm run package:check` (pinned ADB/Gnirehtet + Electron Builder unpacked artifact) passed. Runtime/service dependency versions were not upgraded.
+- **18/18 interactive browser QA scenarios passed** after the narrow-layout fix. Browser result JSON and screenshots were produced locally with only fake device data.
 
-## Interactive scenarios (17/17 passed)
+## Interactive scenarios (18/18 passed)
 
 | Scenario | Result |
 | --- | --- |
@@ -22,6 +22,7 @@
 | No document-level horizontal overflow at 600, 800, 1008 and 1280 px; Engine text stays readable at 600 px | PASS |
 | Two simulated devices, including unauthorized/long-name entry, have visible actions at 600 px | PASS |
 | Empty simulated device list renders correctly, then restores | PASS |
+| Engine start/stop and per-device retry/disconnect invoke their own IPC actions; a failed action shows a localized alert and the next successful retry clears it | PASS |
 | 30 incoming synthetic log lines do not scroll the dashboard page | PASS |
 | Clear Logs becomes enabled with logs and disabled again after clearing | PASS |
 | Settings shows the real time of an actual simulated successful update check (with seconds) | PASS |
@@ -54,7 +55,7 @@ Environment overrides: `WIREBOUND_QA_BASE_URL` for the static renderer URL and `
 
 ## Remaining release / platform gates
 
-- **Unverified in this run:** packaged Electron cold launches and intermittent blank renderer issue [#44](https://github.com/man612/wirebound/issues/44).
+- **Open issue #44 / inconsistent cold-start observations:** three consecutive earlier cold starts of the actual Windows **unpacked** Electron build with isolated application data and remote debugging successfully loaded the renderer/DOM and showed Dark onboarding without manual reload. However, after the latest build, a short-startup probe could not reach the debugging endpoint, and a repeat probe saw a live `wirebound.exe` process but **no debugging endpoint across 10 attempts (~20+ s)**. This does not independently establish a blank renderer (the DOM could not be inspected), but it is **not a passing cold-start check**. Keep [#44](https://github.com/man612/wirebound/issues/44) OPEN; investigate startup instrumentation and repeat launches of the installed NSIS app without debugging before any release claim. Tests used isolated QA app data and did not start tethering.
 - **Unverified in this run:** one physical Android phone's real USB authorization, Gnirehtet connect → disconnect → retry → stop, VPN approval and genuine TUN RX/TX under these newest UI changes. Previous hardware validation is documented in [#38](https://github.com/man612/wirebound/issues/38), but should not be misrepresented as a physical test of this exact UX commit.
 - No dependency modernization, package version increase, tagging, installer publishing or merge is included in this QA task.
 - Hosted GitHub Actions minutes can be exhausted independently of code correctness; locally recorded tests remain useful but do not turn missing hardware/installed-app QA into a pass.
