@@ -11,6 +11,7 @@ import { applyDeviceTunnelStates } from './deviceState'
 import { getDevicePollInterval } from './polling'
 import { applyCrashUploadConsent, initializeCrashReporting } from './services/telemetryService'
 import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
+import { traceStartup } from './startupTrace'
 
 
 let mainWindow: BrowserWindow | null = null
@@ -24,7 +25,9 @@ let handlersRegistered = false
 let shutdownStarted = false
 let shutdownComplete = false
 
+traceStartup('main-module-start')
 initializeCrashReporting()
+traceStartup('crash-reporting-initialized')
 
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
@@ -185,11 +188,13 @@ function ensureServices(): { paths: RuntimePaths; adb: AdbService; engine: Gnire
 }
 
 async function bootstrap(): Promise<void> {
+  traceStartup('bootstrap-start')
   const { paths, adb, engine } = ensureServices()
   const settings = loadSettings()
   applyCrashUploadConsent(settings.telemetryEnabled)
 
   mainWindow = createMainWindow(paths)
+  traceStartup('bootstrap-window-created')
   mainWindow.on('close', (event) => {
     if (shutdownStarted) return
     event.preventDefault()
@@ -199,6 +204,7 @@ async function bootstrap(): Promise<void> {
     mainWindow = null
   })
   ensureTray(paths)
+  traceStartup('tray-ready')
 
   if (!handlersRegistered) {
     registerIpcHandlers({
@@ -214,10 +220,13 @@ async function bootstrap(): Promise<void> {
     })
     handlersRegistered = true
   }
+  traceStartup('ipc-ready')
 
   try {
     await adb.ensureServerReady()
+    traceStartup('adb-server-ready')
   } catch (error) {
+    traceStartup('adb-server-unavailable')
     console.warn('Wirebound: ADB server was not ready during bootstrap.', error)
   }
 
@@ -228,6 +237,7 @@ async function bootstrap(): Promise<void> {
   if (settings.autoStart && engine.getStatus() === 'disconnected') {
     void engine.start(getSelectedDns(settings), settings.port)
   }
+  traceStartup('bootstrap-complete')
 }
 
 async function shutdown(): Promise<void> {
@@ -249,6 +259,7 @@ async function shutdown(): Promise<void> {
 }
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
+traceStartup('single-instance-lock', { acquired: hasSingleInstanceLock })
 
 if (!hasSingleInstanceLock) {
   app.quit()
@@ -258,13 +269,19 @@ if (!hasSingleInstanceLock) {
   })
 
   app.whenReady().then(() => {
+    traceStartup('app-when-ready')
     electronApp.setAppUserModelId('com.wirebound.app')
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)
     })
 
-    void bootstrap()
+    void bootstrap().catch((error: unknown) => {
+      traceStartup('bootstrap-rejected', {
+        errorType: error instanceof Error ? error.name : 'unknown'
+      })
+      console.error('Wirebound: Startup failed.', error)
+    })
 
     app.on('activate', () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
