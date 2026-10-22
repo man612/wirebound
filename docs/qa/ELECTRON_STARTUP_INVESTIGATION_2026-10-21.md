@@ -111,6 +111,29 @@ The test subprocesses were terminated by the scoped QA harness after success, no
 
 **Assessment:** The distinct ASAR corruption in the previous local package is addressed for this clean build and guarded against in future packaging commands. The underlying intermittent slow/blank startup tracked by #44 **remains open**, since valid packages in earlier experiments still showed navigation or BrowserWindow delays beyond the chosen deadline.
 
+### Full NSIS installer validation and hosted CI enforcement (2026-10-22)
+
+An installer was rebuilt from the clean guarded commit `8449d8d` with `npm run build:win` on Windows. Electron Builder returned **exit 0**, generated `dist/wirebound-1.2.0-setup.exe`, and the post-package guard verified **3,960 SHA-256-protected ASAR entries, zero failures**. The unsigned **local QA installer** had SHA-256:
+
+`B5CC8A6A69682E65AECD7E36A6C0B4D9140911085191E44FB6FE972D62C2365E`
+
+This checksum applies **only to this locally built installer**, not a future GitHub release asset. Authenticode status was `NotSigned`.
+
+The installer was silently installed into an isolated QA path, and its `resources/app.asar` had the **identical SHA-256** as the unpacked reference from the same build. The corrected startup harness then performed **6/6 successful** cold launches (fresh APPDATA/LOCALAPPDATA on each launch) with a 60-second deadline, without browser-debug flags, reloads or real Android VPN actions. Windows showed the window at **0.598–1.890 seconds** and confirmed a populated React root at **2.679–3.884 seconds** across those six trials. One cleanup-related `render-process-gone` event appeared *after* an otherwise successful startup; the chronological classifier correctly preserved the success. Silent uninstall exited **0**, the QA executable was removed and the normal per-user Wirebound install location remained absent.
+
+A reusable, safety-checked helper was added at `scripts/qa/nsis-installed-smoke.ps1`. It refuses to run when the default or registry-recorded user installation exists or an unrelated Wirebound process is running; installs only into an isolated QA folder; checks the installed-vs-unpacked ASAR checksum **and full embedded SHA-256 integrity**; runs the chronological readiness harness; and attempts silent cleanup even if a test fails. The helper itself also passed **2/2 independent installed cold starts** on the same installer, with a successful uninstall and no residual QA executable.
+
+To repeat the manual GUI/installer validation from a clean checkout on Windows:
+
+```powershell
+npm run build:win
+pwsh -NoProfile -File scripts/qa/nsis-installed-smoke.ps1 -Installer dist/wirebound-1.2.0-setup.exe -Attempts 3 -WaitSeconds 60
+```
+
+**Hosted CI coverage correction:** The Windows GitHub workflow previously called `npx electron-builder --win --dir` directly; therefore prior green CI runs did **not** execute the new ASAR integrity gate. It now runs `npm run qa:asar:test` before packaging and `npm run qa:asar` immediately afterward, failing the job if a SHA-256 payload does not match. Interactive installed NSIS launches are **manual QA**, not misrepresented as tests performed on headless GitHub Actions.
+
+**Remaining boundary:** six installed passes plus two helper-validation passes increase confidence in installer integrity, but they do **not** explain the unrelated earlier slow/blank Electron cases on valid ASAR packages. Keep #44 open until the remaining intermittent root cause is identified or consistently ruled out. No dependency upgrade, merge, real-device VPN retest, Windows security change or release publication was made.
+
 ### Rebuild discipline
 
 Use an unchanged Git checkout from the start of Electron Builder's packaging phase until validation finishes. For a real release, use a clean immutable checkout and run `npm run package:check` in full, then verify the actual installer payload separately. Do not modify files included in `app.asar` during packaging, even if the edits seem to be documentation-only.

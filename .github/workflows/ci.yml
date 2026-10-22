@@ -54,8 +54,14 @@ jobs:
       - name: Build renderer and main process
         run: npm run build
 
+      - name: Verify ASAR guard detects corruption
+        run: npm run qa:asar:test
+
       - name: Package smoke test
         run: npx electron-builder --win --dir
+
+      - name: Verify packaged ASAR payload integrity
+        run: npm run qa:asar
 
       - name: Report packaged size and locale set
         shell: pwsh
