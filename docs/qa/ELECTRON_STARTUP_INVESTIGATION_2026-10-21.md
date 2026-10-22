@@ -161,6 +161,29 @@ The startup trace now supports a **bounded main-process event-loop heartbeat**: 
 
 Interpretation on future long-tail samples: regular heartbeats while the renderer is slow suggest a renderer/navigation or other asynchronous bottleneck; prolonged heartbeat gaps suggest main-loop starvation or OS scheduling delays. Neither pattern alone proves a specific root cause. The heartbeat is diagnostic only—no automatic reload, GPU flag, ADB dependency change or security exclusion is introduced.
 
+### Event-loop heartbeat observed in a rebuilt, ASAR-verified Windows app (2026-10-22)
+
+From frozen commit `8585767`, `npm run build:unpack` returned **exit 0**; the full ASAR verification checked **3,960 files, zero mismatches**. Eight fresh-profile QA launches of this new unpacked executable, with a 70-second deadline, produced **8/8 PASS** and no manual reload. No physical VPN start, debugging port or Windows Defender exclusions were used.
+
+| Metric | One slower startup | Seven faster startups |
+| --- | ---: | ---: |
+| `main-module-start` elapsed | **5,559ms** | 49–60ms |
+| Runtime path setup | 876ms | 37–63ms |
+| Display query | 687ms | 0–1ms |
+| Window icon load | **2,037ms** | 4–7ms |
+| `new BrowserWindow()` | **2,667ms** | 81–328ms |
+| `did-start-loading` to `dom-ready` | **2,848ms** | 166–561ms |
+| Window visible | **20,144ms** | 598–894ms |
+| React root populated | **21,300ms** | 2,593–2,885ms |
+
+The slower trace had numeric heartbeat records: **tick 1 delayed 2,053ms**, **tick 2 delayed 7,642ms**, **tick 3 delayed 945ms**, followed by a healthy 5th tick (1ms late). The 7.6-second main-loop timer gap overlaps the sequence of synchronous native/filesystem work (ADB fingerprinting, display query, icon decode and BrowserWindow constructor). **This demonstrates that the main event loop failed to run its one-second callback on schedule**; it does not establish exactly which operation or OS scheduling condition was responsible. The absence of heartbeat records on quick launches is expected when launches finish before the periodic fifth tick; it is **not a measured zero-millisecond delay**.
+
+In this slower trial, `dom-ready` occurred at **19,294ms** and `adb-server-ready` at **21,033ms**, i.e. **the renderer loaded 1,739ms before ADB readiness**. This is additional evidence against treating ADB startup as an unconditional blocker of renderer load.
+
+`scripts/qa/startup-phase-report.ps1` now summarizes the initial main-module timestamp, display/icon/native window timings, heartbeat event count and maximum reported late-timer duration alongside renderer phases. These traces are limited to QA numeric metadata; **no operating-system security setting, runtime dependency or VPN behavior was changed**.
+
+**Next decision:** determine whether native synchronous window preparation should be reordered or made nonblocking, with a controlled A/B QA comparison before changing the production startup path. A long heartbeat gap is not by itself a reason to disable GPU or add a blind renderer reload. Keep #44 open.
+
 ## Reproduction (Windows QA)
 
 1. Run the existing `npm run package:check` script to create `dist/win-unpacked/wirebound.exe`. It does not install or publish anything.

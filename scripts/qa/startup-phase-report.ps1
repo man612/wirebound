@@ -15,16 +15,30 @@ $rows = foreach ($dir in (Get-ChildItem -LiteralPath $OutputRoot -Directory | So
   if (-not (Test-Path $file)) { continue }
   $times = @{}
   $lastEvent = $null
+  $heartbeatEvents = 0
+  $largestHeartbeatDelayMs = $null
   foreach ($line in (Get-Content -LiteralPath $file)) {
     try { $event = $line | ConvertFrom-Json -ErrorAction Stop } catch { continue }
     if (-not $times.ContainsKey([string]$event.event)) {
       $times[[string]$event.event] = [int]$event.elapsedMs
     }
     $lastEvent = $event.event
+    if ($event.event -eq 'main-loop-heartbeat' -and $null -ne $event.delayMs) {
+      $heartbeatEvents += 1
+      $delay = [int]$event.delayMs
+      if ($null -eq $largestHeartbeatDelayMs -or $delay -gt $largestHeartbeatDelayMs) {
+        $largestHeartbeatDelayMs = $delay
+      }
+    }
   }
 
   [pscustomobject]@{
     attempt = $dir.Name
+    firstMainMs = if ($times.ContainsKey('main-module-start')) { $times['main-module-start'] } else { $null }
+    heartbeatEvents = $heartbeatEvents
+    maxHeartbeatDelayMs = $largestHeartbeatDelayMs
+    displayQueryMs = Get-Duration $times 'display-query-start' 'display-query-ready'
+    iconLoadMs = Get-Duration $times 'window-icon-load-start' 'window-icon-load-ready'
     runtimePathsMs = Get-Duration $times 'runtime-paths-start' 'runtime-paths-ready'
     adbFingerprintMs = Get-Duration $times 'adb-cache-fingerprint-start' 'adb-cache-fingerprint-ready'
     adbCacheVerifyMs = Get-Duration $times 'adb-cache-verify-start' 'adb-cache-verify-ready'
@@ -39,8 +53,10 @@ $rows = foreach ($dir in (Get-ChildItem -LiteralPath $OutputRoot -Directory | So
   }
 }
 
-Write-Output 'MAIN PROCESS / RUNTIME STAGES (milliseconds)'
-$rows | Select-Object attempt,runtimePathsMs,adbFingerprintMs,adbCacheVerifyMs,settingsLoadMs,windowCreateMs | Format-Table -AutoSize
+Write-Output 'MAIN PROCESS AND EVENT LOOP (milliseconds)'
+$rows | Select-Object attempt,firstMainMs,runtimePathsMs,displayQueryMs,iconLoadMs,windowCreateMs,heartbeatEvents,maxHeartbeatDelayMs | Format-Table -AutoSize
+Write-Output 'ADB / SETTINGS DETAILS (milliseconds)'
+$rows | Select-Object attempt,adbFingerprintMs,adbCacheVerifyMs,settingsLoadMs | Format-Table -AutoSize
 Write-Output 'RENDERER AND WINDOW STAGES (milliseconds)'
 $rows | Select-Object attempt,loadStartLagMs,rendererLoadMs,paintAfterLoadMs,shownMs,rootProbeMs,lastEvent | Format-Table -AutoSize
 Write-Output ('ATTEMPTS_ANALYZED='+@($rows).Count)
