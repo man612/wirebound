@@ -138,6 +138,29 @@ pwsh -NoProfile -File scripts/qa/nsis-installed-smoke.ps1 -Installer dist/wirebo
 
 Use an unchanged Git checkout from the start of Electron Builder's packaging phase until validation finishes. For a real release, use a clean immutable checkout and run `npm run package:check` in full, then verify the actual installer payload separately. Do not modify files included in `app.asar` during packaging, even if the edits seem to be documentation-only.
 
+## 2026-10-22 follow-up: healthy ASAR still shows a long-tail startup
+
+Before any new runtime instrumentation was added, the integrity-guarded **same unpacked Electron artifact** passed `npm run qa:asar` (**3,960 of 3,960 embedded payload hashes match**), with no existing Wirebound process or default user installation. Eight fresh APPDATA/LOCALAPPDATA cold starts used the corrected chronological readiness harness with a **70-second timeout**, no debug port, and resource sampling. **All 8/8 passed without reload**, but the first attempt still showed a substantial startup outlier:
+
+| Measurement | Slow first attempt | Other 7 attempts |
+| --- | ---: | --- |
+| First main-module event after process start | 2,374ms | 50–105ms |
+| Runtime path setup | 575ms | 38–460ms |
+| `new BrowserWindow()` | **5,275ms** | 79–126ms |
+| Navigation start to `dom-ready` | **11,209ms** | 257–1,386ms |
+| `window-shown` | **24,716ms** | **576–2,147ms** |
+| Populated React root probe | **26,369ms** | 2,562–4,148ms |
+
+During that 24.7-second visible-window delay, the main process sampled only ~0.66 cumulative CPU-seconds over 28 samples; Defender had ~5.31 CPU-seconds over the same interval. Those totals are descriptive only and **do not prove** antivirus contention, stalled disk I/O or GPU failure.
+
+One notable temporal coincidence: in the slow attempt, `adb-server-ready` occurred at **24,291ms**, and `dom-ready` at **24,349ms**—58ms later. The ADB server bootstrap uses asynchronous sockets/process calls, and other valid earlier tests rendered even when ADB was unavailable. Therefore the correlation does **not establish ADB as the cause**; system-wide scheduling or I/O stalls could delay both events.
+
+### New QA-only event-loop heartbeat
+
+The startup trace now supports a **bounded main-process event-loop heartbeat**: once every five ticks (~5s) and whenever a one-second timer fires >500ms late, it records only `main-loop-heartbeat` with numeric tick and delay. It is activated **only** when `WIREBOUND_QA_STARTUP_TRACE` points to an absolute path; it does not run in ordinary app sessions, does not collect paths or process command lines, calls `unref()`, and stops by 120 seconds or 120 ticks. Two new unit tests cover the default-disabled behavior and bounded QA output.
+
+Interpretation on future long-tail samples: regular heartbeats while the renderer is slow suggest a renderer/navigation or other asynchronous bottleneck; prolonged heartbeat gaps suggest main-loop starvation or OS scheduling delays. Neither pattern alone proves a specific root cause. The heartbeat is diagnostic only—no automatic reload, GPU flag, ADB dependency change or security exclusion is introduced.
+
 ## Reproduction (Windows QA)
 
 1. Run the existing `npm run package:check` script to create `dist/win-unpacked/wirebound.exe`. It does not install or publish anything.

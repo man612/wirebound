@@ -11,7 +11,7 @@ import { applyDeviceTunnelStates } from './deviceState'
 import { getDevicePollInterval } from './polling'
 import { applyCrashUploadConsent, initializeCrashReporting } from './services/telemetryService'
 import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
-import { traceStartup } from './startupTrace'
+import { startStartupHeartbeat, traceStartup } from './startupTrace'
 
 
 let mainWindow: BrowserWindow | null = null
@@ -26,6 +26,7 @@ let shutdownStarted = false
 let shutdownComplete = false
 
 traceStartup('main-module-start')
+startStartupHeartbeat()
 initializeCrashReporting()
 traceStartup('crash-reporting-initialized')
 

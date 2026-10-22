@@ -6,6 +6,7 @@ import { join } from 'node:path'
 const tempDirs: string[] = []
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   vi.resetModules()
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
@@ -40,6 +41,37 @@ describe('opt-in Electron startup timeline', () => {
     expect(event).toHaveProperty('elapsedMs')
     expect(event).not.toHaveProperty('url')
     expect(event).not.toHaveProperty('deviceId')
+  })
+
+  it('never schedules a heartbeat for ordinary application launches', async () => {
+    vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', undefined)
+    const { startStartupHeartbeat } = await import('./startupTrace')
+    expect(startStartupHeartbeat()).toBeNull()
+  })
+
+  it('records numeric QA heartbeats and stops the timer after two minutes', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wirebound-heartbeat-test-'))
+    tempDirs.push(dir)
+    const file = join(dir, 'startup.jsonl')
+    vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', file)
+    vi.useFakeTimers()
+
+    const { startStartupHeartbeat } = await import('./startupTrace')
+    const timer = startStartupHeartbeat()
+    expect(timer).not.toBeNull()
+
+    vi.advanceTimersByTime(120_000)
+    const lines = readFileSync(file, 'utf8').trim().split('\n')
+    const pulses = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+    expect(pulses.length).toBeGreaterThan(0)
+    expect(pulses.every((pulse) => pulse.event === 'main-loop-heartbeat')).toBe(true)
+    expect(pulses.every((pulse) => typeof pulse.tick === 'number')).toBe(true)
+    expect(pulses.every((pulse) => typeof pulse.delayMs === 'number')).toBe(true)
+    expect(pulses.every((pulse) => !('path' in pulse) && !('deviceId' in pulse))).toBe(true)
+
+    const countAtTimeout = pulses.length
+    vi.advanceTimersByTime(10_000)
+    expect(readFileSync(file, 'utf8').trim().split('\n')).toHaveLength(countAtTimeout)
   })
 
   it('never fails application startup when the trace cannot be written', async () => {
