@@ -60,6 +60,45 @@ The Windows host reports Defender antimalware and real-time protection **enabled
 
 **Updated conclusion:** the startup issue is genuinely **intermittent**, and earlier QA also contained an identifiable false-negative classification flaw. Both `main` and PR #50 exhibit slow startup observations, so these runs do not establish a regression caused by UX changes. Defender involvement, disk contention and the exact root cause remain **unproven**. Keep #44 open and avoid disabling protection, upgrading dependencies, or injecting blind reload loops.
 
+## Follow-up: unpacked Electron with fine-grained ADB timing (2026-10-21)
+
+After rebuilding from this issue #44 instrumentation branch (based on `main`, without the PR #50 UX changes), the unpacked Windows application was launched **four times**, with a fresh QA APPDATA/LOCALAPPDATA profile each time and a 55-second readiness deadline. No debugging port, real VPN action, or change to Windows Defender configuration was used.
+
+| Attempt | Startup result | ADB runtime paths (fingerprint / cache verify) | BrowserWindow constructor | Navigation / renderer |
+| --- | --- | --- | --- | --- |
+| 1 | **Timeout at 55s** | 1,388ms total (1,077ms / 20ms) | **17,149ms** | Load began; no `dom-ready` before deadline. The main module's first recorded event was already at 26,613ms process uptime. |
+| 2 | **Timeout at 55s** | 268ms total (238ms / 7ms) | 286ms | Load began; no `dom-ready` before deadline. |
+| 3 | **Pass** | 431ms total (404ms / 8ms) | 162ms | `did-start-loading` to `dom-ready`: **16,348ms**. Window shown at 17,438ms, React-root probe at 19,404ms. |
+| 4 | **Pass** | 52ms total (28ms / 7ms) | 91ms | `did-start-loading` to `dom-ready`: 316ms. Window shown at 616ms, React-root probe at 2,648ms. |
+
+During the two 55-second timeouts the QA main process accumulated only approximately **0.52 seconds of CPU** each. Defender engine cumulative CPU increased approximately **3.92 / 5.45 CPU-seconds** across those 55-second observation windows. Normalizing the Defender deltas by the number of one-second samples yields approximately **0.071, 0.099, 0.079 and 0.093 CPU-seconds per elapsed second** for attempts 1 through 4 respectively, including both the slower and the fast attempts; the larger raw cumulative deltas primarily reflect **longer observation windows**, not demonstrated antivirus blocking. The four experiments produced **zero Defender operational events inside their measured windows**. These are **observational values**, not proof that Defender, disk I/O, system scheduling, ADB or Electron's GPU subsystem caused the delay. An OS process may be blocked or waiting while using little CPU; sampling does not identify the wait source.
+
+**What this rules down:** ADB hashing/verification does **not account for the tens of seconds** missing in these particular runs. At least two distinct stalls were observed: slow main process/BrowserWindow creation and slow renderer navigation. The phenomenon occurs with an **unpacked main-based build as well as installed NSIS builds**, so it is **not exclusive to NSIS or PR #50**.
+
+**Additional trace coverage for the next reproduction:** the instrumentation now separates primary-display query, window icon loading and BrowserWindow construction, and records unresponsive/responsive renderer transitions plus unexpected Electron GPU/utility child-process exits. These additions are strictly opt-in trace events, not a renderer auto-reload or GPU setting change.
+
+To get a compact timing breakdown from preserved JSONL files, use `pwsh -NoProfile -File scripts/qa/startup-phase-report.ps1 -OutputRoot QA_OUTPUT_DIRECTORY`. Interpret absent events as **unobserved**, not as a zero-millisecond stage. Use the startup readiness classifier to distinguish confirmed root+window visibility from timeouts and later QA cleanup kills.
+
+Official Electron performance guidance recommends measuring bottlenecks and not blocking its main process with unnecessary synchronous I/O: https://www.electronjs.org/docs/latest/tutorial/performance . This report does not advocate an unmeasured optimization or disabling host security.
+
+## Important separate finding: ASAR corruption caused by packaging inputs changing
+
+During this investigation, a **local unpacked package** made with Electron Builder unexpectedly exited **code 1 before any main-module trace**. Electron Builder had reported exit code **0**. Examination of its `dist/win-unpacked/resources/app.asar` exposed a genuine payload/header inconsistency:
+
+- ASAR header's `docs/qa/ELECTRON_STARTUP_INVESTIGATION_2026-10-21.md` entry declared **16,612 bytes**, whereas the same working-tree report had grown to **16,974 bytes** (**362-byte delta**) while the asynchronous packaging session was active.
+- The first corrupted payload was that QA document. All following payloads had incorrect offsets, including `out/main/index.js`, preload, renderer JS/CSS/HTML and `package.json`. With the ASAR's 8-byte prefix correctly accounted for, the raw file data for `package.json` was displaced by **362 bytes** relative to the header's declared offset.
+- `package.json` extraction returned a fragment of renderer HTML/CSP rather than a JSON manifest, consistent with Electron aborting **before** the JavaScript main module. This was reproduced by checking raw archive bytes, not inferred merely from process exit codes.
+- A new verification tool (`node scripts/qa/verify-packaged-asar.cjs PATH_TO_APP_ASAR`) checks **every embedded SHA-256-protected file** against its header integrity hash and verifies the Wirebound manifest and required Electron entrypoints. It rejected the corrupted archive (**3,969 entries inspected, 12 failures**) and accepted a known-good earlier package (**3,967 entries, 0 failures**).
+- A synthetic corruption regression test (`npm run qa:asar:test`) creates a valid ASAR, verifies it passes, alters one payload byte without updating the header, and verifies the checker fails. No external dependency upgrade is required.
+
+**Prevention:** `electron-builder.yml` now excludes `docs/**` from runtime packaging because QA reports are not application assets; `scripts/**` was already excluded. The existing `package:check` pipeline now runs the synthetic validator test before packaging and scans the built ASAR afterward; `build:win` and `build:unpack` also scan the built ASAR. This means an Electron Builder exit-0 **cannot automatically be interpreted as packaging success** if the runtime archive contains mismatched payloads.
+
+**Root-cause qualification:** Concurrent editing of an included documentation file is strongly supported by the matching 362-byte displacement and the observed packaging/edit timeline, but the exact internal packer race is not independently instrumented. This **corrupt local QA artefact is a separate issue** from earlier startup stalls reproduced on archives that successfully mounted React. Do not claim fixing packaging input stability fully resolves intermittent #44 startup timing.
+
+### Rebuild discipline
+
+Use an unchanged Git checkout from the start of Electron Builder's packaging phase until validation finishes. For a real release, use a clean immutable checkout and run `npm run package:check` in full, then verify the actual installer payload separately. Do not modify files included in `app.asar` during packaging, even if the edits seem to be documentation-only.
+
 ## Reproduction (Windows QA)
 
 1. Run the existing `npm run package:check` script to create `dist/win-unpacked/wirebound.exe`. It does not install or publish anything.

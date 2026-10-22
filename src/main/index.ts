@@ -273,6 +273,16 @@ if (!hasSingleInstanceLock) {
     showMainWindow()
   })
 
+  app.on('child-process-gone', (_event, details) => {
+    // GPU and utility process failures are distinct from renderer crashes.
+    // Record only the Electron-defined type/reason/code, never process paths.
+    traceStartup('child-process-gone', {
+      type: details.type,
+      reason: details.reason,
+      exitCode: details.exitCode
+    })
+  })
+
   app.whenReady().then(() => {
     traceStartup('app-when-ready')
     electronApp.setAppUserModelId('com.wirebound.app')

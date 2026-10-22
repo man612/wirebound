@@ -5,8 +5,12 @@ import type { RuntimePaths } from './appPaths'
 import { startupTraceEnabled, traceStartup } from './startupTrace'
 
 export function createMainWindow(paths: RuntimePaths): BrowserWindow {
+  traceStartup('display-query-start')
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  traceStartup('display-query-ready')
+  traceStartup('window-icon-load-start')
   const winIcon = nativeImage.createFromPath(paths.icon)
+  traceStartup('window-icon-load-ready')
 
   traceStartup('window-creating')
   const mainWindow = new BrowserWindow({
@@ -55,6 +59,8 @@ export function createMainWindow(paths: RuntimePaths): BrowserWindow {
     }, 2000)
   })
   mainWindow.webContents.on('did-stop-loading', () => traceStartup('did-stop-loading'))
+  mainWindow.webContents.on('unresponsive', () => traceStartup('renderer-unresponsive'))
+  mainWindow.webContents.on('responsive', () => traceStartup('renderer-responsive'))
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, _message, _url, isMainFrame) => {
     traceStartup('did-fail-load', { errorCode, isMainFrame })
   })
