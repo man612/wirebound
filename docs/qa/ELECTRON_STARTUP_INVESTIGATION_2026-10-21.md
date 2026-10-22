@@ -95,6 +95,22 @@ During this investigation, a **local unpacked package** made with Electron Build
 
 **Root-cause qualification:** Concurrent editing of an included documentation file is strongly supported by the matching 362-byte displacement and the observed packaging/edit timeline, but the exact internal packer race is not independently instrumented. This **corrupt local QA artefact is a separate issue** from earlier startup stalls reproduced on archives that successfully mounted React. Do not claim fixing packaging input stability fully resolves intermittent #44 startup timing.
 
+### Frozen-checkout rebuild and smoke validation (2026-10-22)
+
+After committing the packaging guard to a clean worktree, **no source or documentation files were edited while Electron Builder was packing**. The complete local Windows `npm run package:check` returned **exit 0**. The new guard inspected **3,960 SHA-256-protected ASAR payloads, zero mismatches**. Independent header checks confirmed `docs/**` was absent, while the manifest and compiled Electron main module remained present.
+
+With the verified unpacked executable and **three fresh isolated QA profiles** (no DevTools port, no manual renderer reload), the corrected cold-start harness returned **3/3 PASS**:
+
+| Attempt | Window shown | React root probe | Notable phase |
+| --- | --- | --- | --- |
+| 1 | 9,029ms | 11,014ms | 905ms runtime paths, 1,294ms BrowserWindow construction, 5,751ms renderer loading |
+| 2 | 625ms | 2,619ms | 87ms BrowserWindow construction and 306ms renderer loading |
+| 3 | 568ms | 2,564ms | 83ms BrowserWindow construction and 265ms renderer loading |
+
+The test subprocesses were terminated by the scoped QA harness after success, no Wirebound QA executable remained running, and the user's normal install path was not used. This was **unpacked smoke QA only**, not an installed NSIS comparison for the exact newly guarded commit, not a phone VPN connectivity retest, and not an official release.
+
+**Assessment:** The distinct ASAR corruption in the previous local package is addressed for this clean build and guarded against in future packaging commands. The underlying intermittent slow/blank startup tracked by #44 **remains open**, since valid packages in earlier experiments still showed navigation or BrowserWindow delays beyond the chosen deadline.
+
 ### Rebuild discipline
 
 Use an unchanged Git checkout from the start of Electron Builder's packaging phase until validation finishes. For a real release, use a clean immutable checkout and run `npm run package:check` in full, then verify the actual installer payload separately. Do not modify files included in `app.asar` during packaging, even if the edits seem to be documentation-only.
