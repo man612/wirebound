@@ -26,22 +26,29 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
   $savedLocalAppData = $env:LOCALAPPDATA
   $savedTrace = $env:WIREBOUND_QA_STARTUP_TRACE
   $savedIconSkip = $env:WIREBOUND_QA_SKIP_WINDOW_ICON
+  $savedQaIsolation = $env:WIREBOUND_QA_PROFILE_ISOLATION
+  $savedQaProfileDir = $env:WIREBOUND_QA_PROFILE_DIR
   $iconMode = if ($SkipWindowIcon) { 'skip' } else { 'normal' }
   $child = $null
   $result = 'not-started'
   $attemptStartedAt = Get-Date
   $samples = [System.Collections.Generic.List[object]]::new()
   try {
-    # Start-Process inherits these variables. No real settings profile is touched.
+    # Electron uses native app.getPath('userData') on Windows and may ignore
+    # APPDATA-only overrides. Explicit app.setPath gating is mandatory.
     $env:APPDATA = $appData
     $env:LOCALAPPDATA = $localAppData
     $env:WIREBOUND_QA_STARTUP_TRACE = $timeline
     $env:WIREBOUND_QA_SKIP_WINDOW_ICON = if ($SkipWindowIcon) { '1' } else { '0' }
+    $env:WIREBOUND_QA_PROFILE_ISOLATION = '1'
+    $env:WIREBOUND_QA_PROFILE_DIR = Join-Path $attemptDir 'user-data'
     $child = Start-Process -FilePath $resolvedExe -WorkingDirectory (Split-Path $resolvedExe) -PassThru
     $env:APPDATA = $savedAppData
     $env:LOCALAPPDATA = $savedLocalAppData
     $env:WIREBOUND_QA_STARTUP_TRACE = $savedTrace
     $env:WIREBOUND_QA_SKIP_WINDOW_ICON = $savedIconSkip
+    $env:WIREBOUND_QA_PROFILE_ISOLATION = $savedQaIsolation
+    $env:WIREBOUND_QA_PROFILE_DIR = $savedQaProfileDir
 
     for ($step = 1; $step -le $WaitSeconds; $step++) {
       Start-Sleep -Seconds 1
@@ -123,6 +130,8 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
     $env:LOCALAPPDATA = $savedLocalAppData
     $env:WIREBOUND_QA_STARTUP_TRACE = $savedTrace
     $env:WIREBOUND_QA_SKIP_WINDOW_ICON = $savedIconSkip
+    $env:WIREBOUND_QA_PROFILE_ISOLATION = $savedQaIsolation
+    $env:WIREBOUND_QA_PROFILE_DIR = $savedQaProfileDir
     if ($child) {
       $live = Get-CimInstance Win32_Process -Filter "ProcessId=$($child.Id)" -ErrorAction SilentlyContinue
       # Never terminate an unrelated Wirebound or other user process.

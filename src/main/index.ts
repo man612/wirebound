@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, Tray } from 'electron'
+import { mkdirSync } from 'node:fs'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { getRuntimePaths } from './appPaths'
 import type { RuntimePaths } from './appPaths'
@@ -12,6 +13,7 @@ import { getDevicePollInterval } from './polling'
 import { applyCrashUploadConsent, initializeCrashReporting } from './services/telemetryService'
 import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
 import { startStartupHeartbeat, traceStartup } from './startupTrace'
+import { getQaProfileDir } from './qaProfile'
 
 
 let mainWindow: BrowserWindow | null = null
@@ -24,6 +26,17 @@ let gnirehtetService: GnirehtetService | null = null
 let handlersRegistered = false
 let shutdownStarted = false
 let shutdownComplete = false
+
+// The QA harness must never write into the normal Electron userData path.
+// Electron does not necessarily honor changed APPDATA in a spawned process;
+// override userData/sessionData before 'ready' only for explicit QA isolation.
+const qaProfileDir = getQaProfileDir()
+if (qaProfileDir) {
+  mkdirSync(qaProfileDir, { recursive: true })
+  app.setPath('userData', qaProfileDir)
+  app.setPath('sessionData', qaProfileDir)
+  traceStartup('qa-profile-isolated')
+}
 
 traceStartup('main-module-start')
 startStartupHeartbeat()
