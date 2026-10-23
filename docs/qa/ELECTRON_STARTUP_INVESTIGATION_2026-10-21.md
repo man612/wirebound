@@ -223,11 +223,51 @@ pwsh -NoProfile -File scripts/qa/compare-window-icon-startup.ps1 -Rounds 6 -Wait
 
 The A/B script refuses to run if a Wirebound instance is active, the default user install exists, the expected packaged ASAR is missing or a named QA output directory already exists. It delegates individual launches to the path-checked cold-start harness, saving numeric `icon-ab-results.csv` and each attempt's trace locally. It never auto-installs, starts a VPN, mutates user settings, disables Windows protections, or uploads local process logs.
 
+## 2026-10-23: launch-gap QA, trace-on/off comparison and corrected profile isolation
+
+### Long-tail startup reproduced in different conditions
+
+On the same existing ASAR-verified unpacked executable, an **observational** `compare-launch-gaps.ps1` experiment compared 2-second versus 20-second pauses using a balanced sequence and 70-second per-attempt deadline:
+
+| Group | Outcome | Median `window-shown` among observed passes |
+| --- | --- | --- |
+| Unscored warm-up | Window shown **55,257ms**; first main event **7,426ms**; maximum heartbeat lateness **19,586ms** | — |
+| 2-second gap (6) | **6/6 passed**, including a **51,232ms** launch | **751.5ms** |
+| 20-second gap (6) | **5/6 passed**; one remained without `dom-ready` or a visible window by the 70-second QA cutoff | **710ms** |
+
+The 20-second-gap timeout showed first main trace at **60ms**, `window-created` at **336ms**, and `did-start-loading` at **376ms**. Heartbeat lateness reached **17,626ms**, yet from roughly 26 seconds onward it resumed regular ~5-second entries while the renderer still had not reached `dom-ready` past **70 seconds**. There was no recorded `did-fail-load` or renderer crash before the harness terminated its own process. This is **not proof of a permanent deadlock**, since the QA intentionally imposed a deadline.
+
+The 2-second-gap outlier showed `window-shown` at **51,232ms**, `new BrowserWindow()` lasting ~**9,913ms**, and event-loop heartbeat delay reaching **16,453ms**. Because both gap treatments exhibit major delays, there is **no evidence that simply waiting 20 seconds between launches fixes #44**. The warm-up launched under the same QA harness and could reflect additional first-run/cache/system effects.
+
+### Trace instrumentation can affect timing, but does not explain all stalls
+
+A separate independent **Windows API external window-visibility probe** (`Get-Process.MainWindowHandle` and `IsWindowVisible`) enabled a first A/B comparison of the *same executable* with `WIREBOUND_QA_STARTUP_TRACE` either enabled or entirely unset. Unlike the internal root probe, external window detection works even with tracing off.
+
+- Original trace-first 12 scored starts: **5/6 trace-on windows visible within 70s** (one internal `window-shown` event at **72,289ms**, beyond external cutoff), compared with **6/6 trace-off windows visible**, between **660–4,514ms**. A second trace-on run showed the window externally but lacked a root probe before termination; the original A/B script incorrectly classified this as a failure. We corrected scoring to treat **external visibility identically for both variants**, with React as optional diagnostic metadata.
+- Reversed 12 scored starts: **6/6 trace-on** and **6/6 trace-off** windows visible within 70s; medians **866.5ms** and **793.5ms** respectively. Crucially, the separate *untraced warm-up* required **57,071ms** to show the window. Therefore severe launch latency **can occur without internal tracing**.
+- These comparisons are **small, uncontrolled for host CPU/disk scheduling**, and do not establish that tracing is harmless or causal. A one-off Windows counter sample during investigation showed around **84% total CPU** and **2.2GB available RAM**, also not proof of a specific cause.
+
+### Important QA safety correction: APPDATA alone did not isolate Electron userData
+
+We audited the actual child-process command lines instead of trusting harness environment variables. Under the earlier harness, which changed `APPDATA` and `LOCALAPPDATA` but did not explicitly set Electron's `userData`, Chromium child processes still used the regular Windows roaming `wirebound` profile, while the intended temporary QA `appdata` directory was empty. **Earlier descriptions of complete fresh-profile isolation were therefore incorrect**. The temporary `LOCALAPPDATA` override did affect ADB cache placement, but **did not guarantee isolated Chromium settings or caches**. This is an important methodological limitation on older startup comparisons and any effects of cache warming. We did **not** inspect or delete the existing roaming Wirebound user data.
+
+The new QA-only gate `WIREBOUND_QA_PROFILE_ISOLATION=1` plus an **absolute** `WIREBOUND_QA_PROFILE_DIR` calls Electron `app.setPath('userData', ...)` and `app.setPath('sessionData', ...)` **before** Electron's `ready` event, creating the directory if necessary. If explicitly requested with a missing or relative path, it fails closed rather than silently falling back. No override runs for ordinary app launches. The updated `electron-cold-start.ps1` and the external trace-on/off A/B runner set this path independently for every trial, **including trials with internal tracing disabled**, while preserving independent temporary `APPDATA` and `LOCALAPPDATA` for any other code.
+
+**Verification after a frozen Windows rebuild:** typecheck **PASS**, **58/58 Vitest** PASS, lint **0 errors / 54 warnings**, `npm run build:unpack` PASS, embedded ASAR integrity **3,960 files verified / zero mismatches**. A separate QA-only smoke run demonstrated the requested profile was created and populated (**16 top-level entries**), the new `qa-profile-isolated` event occurred, **one renderer** had the explicit QA user-data path, and **all four sampled Chromium subprocesses** used the QA path. The app created a window and the smoke helper exited **0** with targeted process cleanup.
+
+### Re-run after verified profile isolation
+
+The updated standalone cold-start harness also passed **2/2** isolated launches, with **two independent populated QA `user-data` folders** (14 entries each). The corrected trace-on/off runner was exercised on the **new ASAR-verified Windows build** with its normal icon in place, using two reversed/balanced blocks and 60-second cutoff, after independently proving user-data isolation. An unscored, untraced warm-up showed the window at **1,162ms**. All **8/8 scored launches** visibly opened: **4/4 trace-on** and **4/4 trace-off**. External-window medians were **1,069ms trace-on** and **1,209ms trace-off**, maxima **1,579ms** and **1,292ms**, respectively. A sample from each variant had a freshly populated isolated `user-data` directory (**14 top-level entries**), and no QA Wirebound process remained at the end. These numbers show **no observed trace penalty** in this small, successful batch; they do **not establish equality or explain the rare 50–70s outliers**. Unlike prior comparisons, these launches did not share the default Electron Chromium profile.
+
+The source of intermittent main-process stalls and incomplete renderer loads is **still unproven**. In particular, changed OS load, Chromium caches, and timing instrumentation remain potential confounders. Do not disable Defender, force GPU flags, strip normal Wirebound icons, or install a blind renderer reload as a purported solution.
+
+[Electron app path documentation](https://www.electronjs.org/docs/latest/api/app#appsetpathname-path) notes that `app.setPath` needs an existing directory and session paths must be overridden before `ready`. These path overrides are a **test-harness correction**, not a production-mode startup optimization.
+
 ## Reproduction (Windows QA)
 
 1. Run the existing `npm run package:check` script to create `dist/win-unpacked/wirebound.exe`. It does not install or publish anything.
 2. Run `pwsh -NoProfile -File scripts/qa/electron-cold-start.ps1 -Attempts 3 -WaitSeconds 25`.
-3. The harness uses a distinct temporary APPDATA and LOCALAPPDATA per attempt, preserving startup event traces under your system temporary folder in `wirebound-cold-start-qa`. It will terminate **only its own** executable process after confirming the executable path.
+3. The updated harness creates distinct temporary APPDATA and LOCALAPPDATA **and explicitly sets Electron's `userData`/`sessionData` via the QA-only isolation gate** for each attempt, preserving event traces under your system temporary folder in `wirebound-cold-start-qa`. (Earlier harness versions did **not** isolate Electron's Chromium profile; see the October 23 correction above.) It will terminate **only its own** executable process after confirming the executable path.
 4. Inspect each `startup.jsonl`; a passing attempt needs a `renderer-root-probe` with `rootChildren > 0` **and a `window-shown` event**, in either order, before any fatal startup event. The probe's own `visible` value can legitimately be false if the window shows later. The script returns nonzero for genuinely not-ready attempts.
 
 Optional monitoring: add `-ObserveResources -CountDefenderEvents` to the harness command to save only numeric QA/Defender process measurements and Defender event-ID totals. Run `pwsh -NoProfile -File scripts/qa/startup-readiness.test.ps1` to test the sequence classifier, and `pwsh -NoProfile -File scripts/qa/summarize-startup-traces.ps1 -OutputRoot QA_OUTPUT_DIRECTORY` to reclassify saved traces. No Defender event messages, paths or personal file data are recorded.
