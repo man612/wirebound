@@ -43,6 +43,22 @@ describe('opt-in Electron startup timeline', () => {
     expect(event).not.toHaveProperty('deviceId')
   })
 
+  it('cannot skip the window icon outside explicit QA tracing', async () => {
+    vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', undefined)
+    vi.stubEnv('WIREBOUND_QA_SKIP_WINDOW_ICON', '1')
+    const { skipWindowIconForQa } = await import('./startupTrace')
+    expect(skipWindowIconForQa).toBe(false)
+  })
+
+  it('skips the window icon only with opt-in absolute QA trace and flag', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wirebound-icon-qa-test-'))
+    tempDirs.push(dir)
+    vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', join(dir, 'startup.jsonl'))
+    vi.stubEnv('WIREBOUND_QA_SKIP_WINDOW_ICON', '1')
+    const { skipWindowIconForQa } = await import('./startupTrace')
+    expect(skipWindowIconForQa).toBe(true)
+  })
+
   it('never schedules a heartbeat for ordinary application launches', async () => {
     vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', undefined)
     const { startStartupHeartbeat } = await import('./startupTrace')

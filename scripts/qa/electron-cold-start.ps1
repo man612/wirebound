@@ -4,7 +4,8 @@ param(
   [ValidateRange(5, 120)] [int] $WaitSeconds = 20,
   [string] $OutputRoot = (Join-Path ([System.IO.Path]::GetTempPath()) 'wirebound-cold-start-qa'),
   [switch] $ObserveResources,
-  [switch] $CountDefenderEvents
+  [switch] $CountDefenderEvents,
+  [switch] $SkipWindowIcon
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,6 +25,8 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
   $savedAppData = $env:APPDATA
   $savedLocalAppData = $env:LOCALAPPDATA
   $savedTrace = $env:WIREBOUND_QA_STARTUP_TRACE
+  $savedIconSkip = $env:WIREBOUND_QA_SKIP_WINDOW_ICON
+  $iconMode = if ($SkipWindowIcon) { 'skip' } else { 'normal' }
   $child = $null
   $result = 'not-started'
   $attemptStartedAt = Get-Date
@@ -33,10 +36,12 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
     $env:APPDATA = $appData
     $env:LOCALAPPDATA = $localAppData
     $env:WIREBOUND_QA_STARTUP_TRACE = $timeline
+    $env:WIREBOUND_QA_SKIP_WINDOW_ICON = if ($SkipWindowIcon) { '1' } else { '0' }
     $child = Start-Process -FilePath $resolvedExe -WorkingDirectory (Split-Path $resolvedExe) -PassThru
     $env:APPDATA = $savedAppData
     $env:LOCALAPPDATA = $savedLocalAppData
     $env:WIREBOUND_QA_STARTUP_TRACE = $savedTrace
+    $env:WIREBOUND_QA_SKIP_WINDOW_ICON = $savedIconSkip
 
     for ($step = 1; $step -le $WaitSeconds; $step++) {
       Start-Sleep -Seconds 1
@@ -77,7 +82,7 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
     }
     if ($result -eq 'not-started') { $result = 'startup-timed-out' }
     if ($result -ne 'pass') { $failures++ }
-    Write-Output "ATTEMPT=$attempt RESULT=$result TRACE=$timeline"
+    Write-Output "ATTEMPT=$attempt ICON_MODE=$iconMode RESULT=$result TRACE=$timeline"
     if (Test-Path $timeline) {
       Get-Content -LiteralPath $timeline | ForEach-Object {
         $entry = $_ | ConvertFrom-Json
@@ -117,6 +122,7 @@ for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
     $env:APPDATA = $savedAppData
     $env:LOCALAPPDATA = $savedLocalAppData
     $env:WIREBOUND_QA_STARTUP_TRACE = $savedTrace
+    $env:WIREBOUND_QA_SKIP_WINDOW_ICON = $savedIconSkip
     if ($child) {
       $live = Get-CimInstance Win32_Process -Filter "ProcessId=$($child.Id)" -ErrorAction SilentlyContinue
       # Never terminate an unrelated Wirebound or other user process.

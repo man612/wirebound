@@ -2,15 +2,15 @@ import { BrowserWindow, nativeImage, screen } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { RuntimePaths } from './appPaths'
-import { startupTraceEnabled, traceStartup } from './startupTrace'
+import { skipWindowIconForQa, startupTraceEnabled, traceStartup } from './startupTrace'
 
 export function createMainWindow(paths: RuntimePaths): BrowserWindow {
   traceStartup('display-query-start')
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   traceStartup('display-query-ready')
-  traceStartup('window-icon-load-start')
-  const winIcon = nativeImage.createFromPath(paths.icon)
-  traceStartup('window-icon-load-ready')
+  traceStartup('window-icon-load-start', { skipped: skipWindowIconForQa })
+  const winIcon = skipWindowIconForQa ? undefined : nativeImage.createFromPath(paths.icon)
+  traceStartup('window-icon-load-ready', { skipped: skipWindowIconForQa })
 
   traceStartup('window-creating')
   const mainWindow = new BrowserWindow({

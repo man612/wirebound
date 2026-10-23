@@ -6,6 +6,10 @@ import { performance } from 'node:perf_hooks'
 // Callers must pass metadata only: no device IDs, user data, URLs or filesystem paths.
 const traceFile = process.env.WIREBOUND_QA_STARTUP_TRACE
 export const startupTraceEnabled = Boolean(traceFile && isAbsolute(traceFile))
+// QA experiment only: bypass Window icon decoding in one of two same-binary
+// startup conditions. Never available without an explicit absolute trace path.
+export const skipWindowIconForQa =
+  startupTraceEnabled && process.env.WIREBOUND_QA_SKIP_WINDOW_ICON === '1'
 
 type TraceDetail = Record<string, string | number | boolean | null>
 
