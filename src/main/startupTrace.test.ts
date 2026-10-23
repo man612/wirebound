@@ -50,6 +50,15 @@ describe('opt-in Electron startup timeline', () => {
     expect(skipWindowIconForQa).toBe(false)
   })
 
+  it('keeps the normal window icon when tracing is enabled without the skip flag', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wirebound-icon-default-test-'))
+    tempDirs.push(dir)
+    vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', join(dir, 'startup.jsonl'))
+    vi.stubEnv('WIREBOUND_QA_SKIP_WINDOW_ICON', '0')
+    const { skipWindowIconForQa } = await import('./startupTrace')
+    expect(skipWindowIconForQa).toBe(false)
+  })
+
   it('skips the window icon only with opt-in absolute QA trace and flag', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'wirebound-icon-qa-test-'))
     tempDirs.push(dir)

@@ -184,6 +184,45 @@ In this slower trial, `dom-ready` occurred at **19,294ms** and `adb-server-ready
 
 **Next decision:** determine whether native synchronous window preparation should be reordered or made nonblocking, with a controlled A/B QA comparison before changing the production startup path. A long heartbeat gap is not by itself a reason to disable GPU or add a blind renderer reload. Keep #44 open.
 
+## 2026-10-23 controlled A/B: is native window icon decoding the cause?
+
+**Hypothesis:** Windows image decoding for the frameless BrowserWindow icon might be a major contributor to occasional 20–25-second startup stalls. To isolate this without affecting normal users, commit `3d588b8` added `WIREBOUND_QA_SKIP_WINDOW_ICON=1`, strictly gated behind an **explicit absolute `WIREBOUND_QA_STARTUP_TRACE` file path**. Ordinary application launches continue to decode and display the normal icon. The harness's `-SkipWindowIcon` switch changes **only that one variable**, and records `skipped: true/false` at the icon stage. Production icon handling and the renderer were not changed.
+
+### Protocol and integrity
+
+- Windows 11 QA host YASMAN; same `dist/win-unpacked/wirebound.exe` executable for **all 48** starts, identical application binaries/renderer/dependencies in both groups; all starts used their own APPDATA and LOCALAPPDATA directories.
+- `npm run build:unpack` **PASS** on the frozen `3d588b8` source. The post-package check verified **3,960/3,960** embedded ASAR payload hashes. The ASAR SHA-256 was `86E1BC55A90A4373C7A0ABD030B4766813110BD693D9803C8E07A66337FD360C`; the unpacked `wirebound.exe` SHA-256 was `00F88D9B92A432C858AD437E9F6362A6B12CFC27F8E4EA1BBB4295B28F0B5AAF`. These are **local QA artefact hashes**, not signed or published installer checksums.
+- First run: **6 balanced blocks** of `normal, skip, skip, normal` = 24 starts. Second run: **6 balanced blocks** of `skip, normal, normal, skip` = 24 starts. Each start had a **70-second** deadline; the script checked both the visible window and populated React root in event order. All **48/48 passed**; no reload.
+- Both sequences used one **same binary** for both modes. This counterbalancing helps, but **does not fully control Windows scheduling, file cache, or other system activity**.
+
+### Numeric observations
+
+| Measurement | Normal icon (24 starts) | QA skips icon decode (24 starts) |
+| --- | ---: | ---: |
+| Window+React startup tests passed | **24/24** | **24/24** |
+| Median `window-shown` | **638.5 ms** | **648.5 ms** |
+| 90th percentile `window-shown` (nearest rank) | 865 ms | 1,279 ms |
+| Maximum `window-shown` | 4,181 ms | 2,816 ms |
+| Median `window-icon-load-start` → ready | 5.0 ms | 0.0 ms |
+| Median `new BrowserWindow()` duration | 92.5 ms | 32.5 ms |
+| Median navigation to `dom-ready` | 297.5 ms | 333.5 ms |
+
+The first run's **first trial** was normal-icon and took **4,181 ms** to show a window, with a 2,173ms main-loop heartbeat delay. Reversing the order caused the other run's **first trial**, **without** icon decoding, to take **2,816 ms** (heartbeat delayed 931ms). This is evidence that **slower initial launches can occur independently of decoding the icon**, consistent with a first-run/system-cache confound. It is not a demonstration of the precise OS mechanism.
+
+The mode without icon does spend **~60ms less median time inside the native BrowserWindow constructor** and avoids ~5ms median synchronous icon decoding; however the **overall median window-show time did not improve** (648.5ms skip versus 638.5ms normal) and the skip group had a slower 90th percentile in this limited sample. Neither series reproduced the rare 20–25-second outlier, which remains possible with a larger sample. No statistical claim of causation or permanent resolution can be made from 24 attempts per mode.
+
+**Decision:** **Do not remove or alter the user's production Wirebound icon** based on these numbers. This QA-only experiment rules down the icon as a necessary cause of long startup stalls, not every possible interaction with the native window manager. Keep #44 open. No runtime behavior, ADB/Gnirehtet connectivity, GPU flags, antivirus configuration, dependency version, installation or published release was changed.
+
+### Reproduce the paired experiment
+
+```powershell
+npm run build:unpack
+pwsh -NoProfile -File scripts/qa/compare-window-icon-startup.ps1 -Rounds 6 -WaitSeconds 70 -OutputRoot YOUR_EMPTY_QA_FOLDER_ABBA
+pwsh -NoProfile -File scripts/qa/compare-window-icon-startup.ps1 -Rounds 6 -WaitSeconds 70 -StartWithSkip -OutputRoot YOUR_OTHER_EMPTY_QA_FOLDER_BAAB
+```
+
+The A/B script refuses to run if a Wirebound instance is active, the default user install exists, the expected packaged ASAR is missing or a named QA output directory already exists. It delegates individual launches to the path-checked cold-start harness, saving numeric `icon-ab-results.csv` and each attempt's trace locally. It never auto-installs, starts a VPN, mutates user settings, disables Windows protections, or uploads local process logs.
+
 ## Reproduction (Windows QA)
 
 1. Run the existing `npm run package:check` script to create `dist/win-unpacked/wirebound.exe`. It does not install or publish anything.

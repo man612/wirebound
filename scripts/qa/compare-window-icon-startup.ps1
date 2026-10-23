@@ -2,6 +2,7 @@ param(
   [string] $ExePath = (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'dist\win-unpacked\wirebound.exe'),
   [ValidateRange(1, 10)] [int] $Rounds = 4,
   [ValidateRange(5, 120)] [int] $WaitSeconds = 70,
+  [switch] $StartWithSkip,
   [string] $OutputRoot = (Join-Path ([System.IO.Path]::GetTempPath()) ('wirebound-icon-ab-' + [guid]::NewGuid().ToString('N')))
 )
 
@@ -21,7 +22,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $base 'resources\app.asar'))) {
 }
 
 New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
-$sequence = @('normal', 'skip', 'skip', 'normal')
+# Counterbalance cold OS caches by optionally reversing the first condition.
+$sequence = if ($StartWithSkip) {
+  @('skip', 'normal', 'normal', 'skip')
+} else {
+  @('normal', 'skip', 'skip', 'normal')
+}
 $index = 0
 $results = [System.Collections.Generic.List[object]]::new()
 $startTool = Join-Path $PSScriptRoot 'electron-cold-start.ps1'
