@@ -6,7 +6,9 @@ import { join } from 'node:path'
 import {
   ADB_RUNTIME_FILES,
   fingerprintAdbRuntime,
-  verifyAndPopulateAdbCache
+  verifyAndPopulateAdbCache,
+  fingerprintAdbRuntimeAsync,
+  verifyAndPopulateAdbCacheAsync
 } from './adbCacheFingerprint'
 
 const temporaryDirectories: string[] = []
@@ -57,6 +59,24 @@ describe('ADB runtime cache fingerprint', () => {
     for (const name of ADB_RUNTIME_FILES) {
       expect(readFileSync(join(cached, name))).toEqual(readFileSync(join(bundled, name)))
     }
+  })
+
+  it('async fingerprint matches the historical synchronous cache identifier', async () => {
+    const { bundled } = fixtures()
+    const fast = fingerprintAdbRuntime(bundled)
+    await expect(fingerprintAdbRuntimeAsync(bundled)).resolves.toEqual(fast)
+  })
+
+  it('async cache copy checks integrity and restores damaged files', async () => {
+    const { bundled, cached } = fixtures()
+    const { sourceHashes } = await fingerprintAdbRuntimeAsync(bundled)
+    expect(await verifyAndPopulateAdbCacheAsync(bundled, cached, sourceHashes)).toBe(3)
+    expect(await verifyAndPopulateAdbCacheAsync(bundled, cached, sourceHashes)).toBe(0)
+    writeFileSync(join(cached, 'AdbWinUsbApi.dll'), 'tampered')
+    expect(await verifyAndPopulateAdbCacheAsync(bundled, cached, sourceHashes)).toBe(1)
+    expect(readFileSync(join(cached, 'AdbWinUsbApi.dll'))).toEqual(
+      readFileSync(join(bundled, 'AdbWinUsbApi.dll'))
+    )
   })
 
   it('rejects missing bundled files and changes fingerprint when bundled contents change', () => {
