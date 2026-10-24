@@ -27,3 +27,36 @@ Windows focused and whole-suite tests are required to pass, including numeric me
 For a slow reproduced start, compare the cumulative writer time to elapsed process time. If writer cumulative time is low (e.g. tens of milliseconds) while native creation or renderer waits consume seconds, the synchronous writer is not sufficient to explain those seconds. If any individual append consumes seconds, instrumenting with a different nonblocking writer or moving diagnostic output off the contested drive may be justified, but will require a separate paired experiment. Changes to QA tracing MUST NOT be presented as an installed-app performance fix.
 
 Release/merge still requires official NSIS, real Android USB/ADB/Gnirehtet parity, repeatable cold/warm measurements, and safe failure/shutdown handling. Keep the UI-first mode QA-only and preserve production window icon and cached ADB integrity.
+
+
+## Actual Windows QA v4 observation — 2026-10-24
+
+A new **manual QA-only** packaged Electron v1.2.0 executable was assembled under F:\Wirebound-Lab\qa-packages\issue44-trace-overhead-manual-v4\win-unpacked with the freshly compiled instrumented main process and existing known-good Electron runtime. The ASAR payload verifier reported **16 verified, zero failures**, and the expected QA flags/manifest were checked. This is NOT a standard electron-builder/NSIS package. The local checkout's 13 Vitest suites passed **75/75 tests**; Node + web typecheck and production Vite/Electron source build returned **exit 0**.
+
+Two launches, each with its own isolated QA userData/sessionData, APPDATA/LOCALAPPDATA and absolute JSONL path, reached visible main window and a populated React root. Both used QA-only deferred ADB, with no heavy counter sampling or installed Wirebound profile changes:
+
+| Measurement | Slow run | Fast run |
+| --- | ---: | ---: |
+| Main module first observed | 3,299ms | 38ms |
+| Electron app.whenReady | 8,054ms | 160ms |
+| Window icon decoding | 1,171ms | 10ms |
+| Native BrowserWindow creation | **4,032ms** | 109ms |
+| Renderer did-start-loading → DOM ready | **8,266ms** | 398ms |
+| Full window shown | **22,406ms** | **838ms** |
+| Nonempty React root | Yes | Yes |
+| Navigation-relative FCP | Unavailable (-1) | 756ms |
+| Largest observed main-loop heartbeat delay | **7,898ms** | None reported |
+| Cumulative trace-writer append time at last recorded event | **42.605ms** | **103.483ms** |
+| Largest single prior appendFileSync | 25.327ms | 94.407ms |
+| Startup harness result | PASS | PASS |
+
+**Interpretation:** The slow run spent only 42.605ms across observed synchronous JSONL appends, compared with 22,406ms until the window was shown. The fast run accumulated **more** append time despite showing its window in 838ms. These measurements strongly suggest that **synchronous trace writes alone are insufficient to explain these specific multi-second stalls**. They do not prove write I/O can never contribute on other runs or devices. Cumulative self-timing is read at the *last* event, which may be later than window-shown, and omits the duration of that last write; it should not be presented as a precisely timed pre-window percentage.
+
+The slow run still had severe delay before main-module first observation and in app.whenReady, native window construction and renderer loading; one heartbeat lag was 7.9 seconds. These stages deserve continued investigation under truly comparable Windows OS/HDD load. No production behavior change or speculative logging rewrite is justified by the observed data.
+
+Raw QA-only traces:
+- F:\Wirebound-Lab\benchmarks\issue44-trace-write-cost-20261024\attempt-1\startup.jsonl
+- F:\Wirebound-Lab\benchmarks\issue44-trace-write-cost-20261024\attempt-2\startup.jsonl
+- F:\Wirebound-Lab\logs\issue44-trace-write-cost-v4.log and issue44-trace-write-overhead-build.log
+
+The source-controlled scripts/qa/startup-phase-report.ps1 now includes traceWriteBeforeShownMs, traceTotalWriteMs, traceMaxWriteMs and navigation-relative first-contentful paint in its results, while remaining compatible with older traces that lack these fields.
