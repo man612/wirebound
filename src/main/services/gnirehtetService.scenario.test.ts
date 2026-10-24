@@ -282,7 +282,13 @@ describe('GnirehtetService lifecycle scenarios', () => {
     const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
     const { adb, stopAllClients } = createAdbDouble()
     let finishCleanup!: (count: number) => void
-    stopAllClients.mockReturnValue(new Promise<number>((resolve) => { finishCleanup = resolve }))
+    let cleanupEntered!: () => void
+    const enteredCleanup = new Promise<void>((resolve) => { cleanupEntered = resolve })
+    const pendingCleanup = new Promise<number>((resolve) => { finishCleanup = resolve })
+    stopAllClients.mockImplementation(() => {
+      cleanupEntered()
+      return pendingCleanup
+    })
     const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true)
 
     await service.start('8.8.8.8', '31416')
@@ -290,7 +296,7 @@ describe('GnirehtetService lifecycle scenarios', () => {
     const second = service.stop()
     let secondSettled = false
     void second.then(() => { secondSettled = true })
-    await Promise.resolve()
+    await enteredCleanup
     expect(secondSettled).toBe(false)
     finishCleanup(2)
     expect(await Promise.all([first, second])).toEqual([{ success: true }, { success: true }])
