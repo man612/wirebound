@@ -3,6 +3,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { RuntimePaths } from './appPaths'
 import { skipWindowIconForQa, startupTraceEnabled, traceStartup } from './startupTrace'
+import { scheduleRendererQaProbes } from './rendererQaProbes'
 
 export function createMainWindow(paths: RuntimePaths): BrowserWindow {
   traceStartup('display-query-start')
@@ -33,8 +34,15 @@ export function createMainWindow(paths: RuntimePaths): BrowserWindow {
   })
 
   traceStartup('window-created')
+  let cancelRendererProbes: (() => void) | null = null
+  let rendererLoadGeneration = 0
   mainWindow.on('show', () => traceStartup('window-shown'))
-  mainWindow.webContents.on('did-start-loading', () => traceStartup('did-start-loading'))
+  mainWindow.on('closed', () => cancelRendererProbes?.())
+  mainWindow.webContents.on('did-start-loading', () => {
+    cancelRendererProbes?.()
+    rendererLoadGeneration += 1
+    traceStartup('did-start-loading')
+  })
   mainWindow.webContents.on('dom-ready', () => traceStartup('dom-ready'))
   mainWindow.webContents.on('did-finish-load', () => {
     traceStartup('did-finish-load')
@@ -42,9 +50,12 @@ export function createMainWindow(paths: RuntimePaths): BrowserWindow {
 
     // Numeric navigation-relative milestones only. No DOM text, settings,
     // URLs, paths, or device identity are read or stored.
-    const probe = (eventName: 'renderer-timing-early' | 'renderer-root-probe'): void => {
-      if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
-      void mainWindow.webContents
+    cancelRendererProbes?.()
+    const generation = rendererLoadGeneration
+    const probe = (eventName: 'renderer-timing-early' | 'renderer-root-probe'): Promise<boolean> => {
+      if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed() ||
+          generation !== rendererLoadGeneration) return Promise.resolve(true)
+      return mainWindow.webContents
         .executeJavaScript(
           "(() => { const entries = performance.getEntriesByType('paint'); const marks = performance.getEntriesByType('mark'); const nav = performance.getEntriesByType('navigation')[0]; const at = (list, name) => Math.round(list.find((e) => e.name === name)?.startTime ?? -1); return { rootChildren: document.getElementById('root')?.childElementCount ?? -1, readyState: document.readyState, firstPaintMs: at(entries, 'first-paint'), firstContentfulPaintMs: at(entries, 'first-contentful-paint'), entryEvaluatedMs: at(marks, 'wirebound:entry-evaluated'), reactFirstCommitMs: at(marks, 'wirebound:react-first-commit'), uiSettingsReadyMs: at(marks, 'wirebound:ui-settings-ready'), responseEndMs: nav ? Math.round(nav.responseEnd) : -1, domInteractiveMs: nav ? Math.round(nav.domInteractive) : -1 }; })()"
         )
@@ -59,22 +70,32 @@ export function createMainWindow(paths: RuntimePaths): BrowserWindow {
           responseEndMs: number
           domInteractiveMs: number
         }) => {
+          if (mainWindow.isDestroyed() || generation !== rendererLoadGeneration) return true
           traceStartup(eventName, { ...result, visible: mainWindow.isVisible() })
+          // Nonempty React root can be a placeholder; only the UI settings
+          // commit mark confirms that rendering progressed beyond it.
+          return result.rootChildren > 0 && result.uiSettingsReadyMs >= 0
         })
-        .catch(() => traceStartup('renderer-root-probe-failed'))
+        .catch(() => {
+          if (generation === rendererLoadGeneration && !mainWindow.isDestroyed()) {
+            traceStartup('renderer-root-probe-failed')
+          }
+          return false
+        })
     }
-    // An early sample helps distinguish Chromium/ESM work from React mount;
-    // retain the original 2s probe for existing QA readiness assertions.
-    setTimeout(() => probe('renderer-timing-early'), 250)
-    setTimeout(() => probe('renderer-root-probe'), 2000)
+    // Keep the original early/full probes. Only if the full probe does not
+    // observe UI readiness, sample again at bounded QA-only deadlines.
+    cancelRendererProbes = scheduleRendererQaProbes(probe)
   })
   mainWindow.webContents.on('did-stop-loading', () => traceStartup('did-stop-loading'))
   mainWindow.webContents.on('unresponsive', () => traceStartup('renderer-unresponsive'))
   mainWindow.webContents.on('responsive', () => traceStartup('renderer-responsive'))
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, _message, _url, isMainFrame) => {
+    if (isMainFrame && errorCode !== -3) cancelRendererProbes?.()
     traceStartup('did-fail-load', { errorCode, isMainFrame })
   })
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    cancelRendererProbes?.()
     traceStartup('render-process-gone', { reason: details.reason, exitCode: details.exitCode })
   })
 

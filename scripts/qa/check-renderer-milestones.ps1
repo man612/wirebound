@@ -8,9 +8,12 @@ $events = @(Get-Content -LiteralPath $TracePath | ForEach-Object {
   catch { throw 'Invalid JSONL startup event.' }
 })
 if (-not $events.Count) { throw 'Startup trace is empty.' }
-$root = $events | Where-Object { $_.event -eq 'renderer-root-probe' } | Select-Object -First 1
-if (-not $root -or $root.rootChildren -le 0) {
-  throw 'Full renderer root probe missing or has no child elements.'
+$root = $events | Where-Object {
+  $_.event -eq 'renderer-root-probe' -and $_.rootChildren -gt 0 -and
+  $null -ne $_.uiSettingsReadyMs -and [double]$_.uiSettingsReadyMs -ge 0
+} | Select-Object -Last 1
+if (-not $root) {
+  throw 'No full renderer probe observed both mounted React and committed settings/UI.'
 }
 $start = [double]$root.entryEvaluatedMs
 $commit = [double]$root.reactFirstCommitMs
