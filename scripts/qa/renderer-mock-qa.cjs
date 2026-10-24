@@ -253,7 +253,7 @@ async function main(){
       hidden:document.querySelector('#wirebound-diagnostic-details').hidden,
       message:document.body.innerText.includes('Beberapa pemeriksaan perlu ditangani'),
       failedCheck:document.body.innerText.includes('Synthetic ADB runtime failure'),
-      completed:document.body.innerText.includes('5/6 siap')
+      completed:document.body.innerText.includes('4/6 siap')
     }));
     if(result.hidden||!result.message||!result.failedCheck||!result.completed)
       throw Error('Completed failed-check scan was hidden or mislabeled: '+JSON.stringify(result));
