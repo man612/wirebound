@@ -1,8 +1,9 @@
 param(
   [string] $ExePath = (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'dist\win-unpacked\wirebound.exe'),
-  [ValidateRange(1, 10)] [int] $Rounds = 4,
+  [ValidateRange(1, 10)] [int] $Rounds = 1,
   [ValidateRange(5, 120)] [int] $WaitSeconds = 70,
   [switch] $StartWithSkip,
+  [switch] $DeferAdbRuntimeForQa,
   [string] $OutputRoot = (Join-Path ([System.IO.Path]::GetTempPath()) ('wirebound-icon-ab-' + [guid]::NewGuid().ToString('N')))
 )
 
@@ -10,10 +11,13 @@ $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Window icon startup QA requires Windows.' }
 $resolvedExe = (Resolve-Path -LiteralPath $ExePath).Path
 if (Test-Path -LiteralPath $OutputRoot) { throw "QA results directory already exists: $OutputRoot" }
-if (Test-Path -LiteralPath "$env:LOCALAPPDATA\Programs\Wirebound") {
-  throw 'A normal Wirebound installation exists; refusing isolated A/B QA.'
+# Presence of a normal installed app is not a conflict: only a running app is.
+# Never launch a QA executable from the user's installed program directory.
+$installedRoot = Join-Path $env:LOCALAPPDATA 'Programs\Wirebound'
+if ($resolvedExe.StartsWith($installedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+  throw 'Selected executable belongs to installed Wirebound; use a QA copy.'
 }
-if (@(Get-CimInstance Win32_Process -Filter "name='wirebound.exe'" -ErrorAction SilentlyContinue).Count -gt 0) {
+if (@(Get-Process -Name wirebound -ErrorAction SilentlyContinue).Count -gt 0) {
   throw 'Another Wirebound process is running; refusing isolated A/B QA.'
 }
 $base = Split-Path -Parent $resolvedExe
@@ -38,6 +42,8 @@ function FirstMs([object[]] $Events, [string] $Name) {
   return [int]$match.elapsedMs
 }
 
+$savedDeferred = [Environment]::GetEnvironmentVariable('WIREBOUND_QA_DEFER_ADB_RUNTIME', 'Process')
+try {
 for ($round = 1; $round -le $Rounds; $round++) {
   foreach ($mode in $sequence) {
     $index++
@@ -49,11 +55,14 @@ for ($round = 1; $round -le $Rounds; $round++) {
       '-ExePath', $resolvedExe,
       '-Attempts', '1',
       '-WaitSeconds', [string]$WaitSeconds,
-      '-OutputRoot', $dir,
-      '-ObserveResources'
+      '-OutputRoot', $dir
     )
     if ($mode -eq 'skip') { $arguments += '-SkipWindowIcon' }
 
+    if (@(Get-Process -Name wirebound -ErrorAction SilentlyContinue).Count -gt 0) {
+      throw 'A Wirebound instance appeared before the next trial; stopping safely.'
+    }
+    if ($DeferAdbRuntimeForQa) { $env:WIREBOUND_QA_DEFER_ADB_RUNTIME = '1' }
     & pwsh @arguments *> $log
     $runnerExit = $LASTEXITCODE
     $trace = Join-Path $dir 'attempt-1\startup.jsonl'
@@ -94,10 +103,24 @@ for ($round = 1; $round -le $Rounds; $round++) {
       windowShownMs = $shown
       reactReadyMs = if ($null -ne $root) { [int]$root.elapsedMs } else { $null }
       maxHeartbeatDelayMs = $maxDelay
+      firstPaintNavigationMs = if ($null -ne $root -and $root.firstPaintMs -ge 0) { [int]$root.firstPaintMs } else { $null }
+      firstContentfulPaintNavigationMs = if ($null -ne $root -and $root.firstContentfulPaintMs -ge 0) { [int]$root.firstContentfulPaintMs } else { $null }
     }
     $results.Add($row)
+    # Persist immediately: a later slow/timed-out trial must not erase prior evidence.
+    $results | Export-Csv -LiteralPath (Join-Path $OutputRoot 'icon-ab-results.csv') -NoTypeInformation -Encoding utf8
+    # The child harness stops only the exact QA process it launched. Wait a
+    # short cleanup grace period, then fail closed instead of killing by name.
+    for ($retry = 0; $retry -lt 10 -and @(Get-Process -Name wirebound -ErrorAction SilentlyContinue).Count -gt 0; $retry++) {
+      Start-Sleep -Milliseconds 700
+    }
+    if (@(Get-Process -Name wirebound -ErrorAction SilentlyContinue).Count -gt 0) {
+      throw 'Wirebound still running after trial. Stop further QA without touching user processes.'
+    }
     Write-Output ('TRIAL={0} MODE={1} PASS={2} WINDOW_MS={3} ICON_MS={4} CONSTRUCTOR_MS={5} HEARTBEAT_MAX_MS={6}' -f $index, $mode, $pass, $shown, $row.iconLoadMs, $row.windowCreateMs, $maxDelay)
   }
+} finally {
+  [Environment]::SetEnvironmentVariable('WIREBOUND_QA_DEFER_ADB_RUNTIME', $savedDeferred, 'Process')
 }
 
 $results | Export-Csv -LiteralPath (Join-Path $OutputRoot 'icon-ab-results.csv') -NoTypeInformation -Encoding utf8
