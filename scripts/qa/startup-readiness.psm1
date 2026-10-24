@@ -17,7 +17,13 @@ function Get-WireboundStartupReadiness {
       $failedBeforeReady = $true
       break
     }
-    if ($entry.event -in @('renderer-timing-early', 'renderer-root-probe')) {
+    if ($entry.event -eq 'renderer-timing-early' -and
+        $null -ne $entry.PSObject.Properties['uiSettingsReadyMs']) {
+      $hasUiMarkField = $true
+    }
+    # Only the full compatibility probe can complete readiness. Accepting the
+    # early probe would stop the QA process before its full trace is recorded.
+    if ($entry.event -eq 'renderer-root-probe') {
       $mark = $entry.PSObject.Properties['uiSettingsReadyMs']
       if ($null -ne $mark) { $hasUiMarkField = $true }
       if ($entry.rootChildren -is [ValueType] -and $entry.rootChildren -gt 0) {
