@@ -4,6 +4,9 @@ import {
   Battery,
   CheckCircle2,
   ClipboardCopy,
+  ChevronDown,
+  ChevronRight,
+  X,
   Download,
   Laptop,
   Link2,
@@ -26,7 +29,9 @@ import type {
   DeviceTunnelStatus,
   LogEntry
 } from '../../../../shared/types'
-import type { Translation } from '../../i18n'
+import type { Language, Translation } from '../../i18n'
+import { formatUiTimestamp, maskDeviceId } from '../../formatters'
+import { hasFailedDiagnosticChecks } from './diagnosticsDisclosure'
 
 interface DashboardProps {
   status: ConnectionStatus
@@ -44,6 +49,7 @@ interface DashboardProps {
     run: () => Promise<void>
   }
   t: Translation
+  language: Language
 }
 
 interface DeviceSetupState {
@@ -209,7 +215,7 @@ function formatDiagnosticReport(report: DiagnosticReport): string {
     lines.push('', 'Devices:')
     for (const device of report.devices) {
       lines.push(
-        `- ${device.name} (${device.id}) | ${device.status} | Android ${device.androidVersion ?? '?'} / API ${device.apiLevel ?? '?'} | Gnirehtet installed: ${device.gnirehtetInstalled ? 'yes' : 'no'} | client active: ${device.gnirehtetActive ? 'yes' : 'no'}`
+        `- ${device.name} (${maskDeviceId(device.id)}) | ${device.status} | Android ${device.androidVersion ?? '?'} / API ${device.apiLevel ?? '?'} | Gnirehtet installed: ${device.gnirehtetInstalled ? 'yes' : 'no'} | client active: ${device.gnirehtetActive ? 'yes' : 'no'}`
       )
     }
   }
@@ -227,32 +233,146 @@ export default function Dashboard({
   logs,
   onClearLogs,
   diagnostics,
-  t
+  t,
+  language
 }: DashboardProps): React.JSX.Element {
   const isRunning = status === 'connected'
   const isConnecting = status === 'connecting'
   const isError = status === 'error'
   const setupState = getDeviceSetupState(devices, status, adbError, t)
   const SetupIcon = setupState.icon
-  const logEndRef = useRef<HTMLDivElement>(null)
-  const [reportCopied, setReportCopied] = useState(false)
+  const logViewportRef = useRef<HTMLDivElement>(null)
+  const logPinnedToBottomRef = useRef(true)
+  const collapseTimerRef = useRef<number | null>(null)
+  const copyTimerRef = useRef<number | null>(null)
+  const manuallyToggledRef = useRef(false)
+  const rerunLockRef = useRef(false)
+  const acknowledgedRerunRef = useRef(0)
+  const initialRevealScheduledRef = useRef(false)
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(true)
+  const [diagnosticsManuallyToggled, setDiagnosticsManuallyToggled] = useState(false)
+  const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | 'issues' | null>(null)
+  const [rerunCycle, setRerunCycle] = useState(0)
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
   const [reportExported, setReportExported] = useState(false)
-  const [deviceActionId, setDeviceActionId] = useState<string>()
+  const deviceActionLockRef = useRef<Set<string>>(new Set())
+  const [deviceActionIds, setDeviceActionIds] = useState<Set<string>>(() => new Set())
+  const [deviceActionErrors, setDeviceActionErrors] = useState<Record<string, boolean>>({})
+  const [readyDismissed, setReadyDismissed] = useState(false)
+  const hasFailedChecks = hasFailedDiagnosticChecks(diagnostics.report)
+  const diagnosticsVisible =
+    diagnosticsExpanded || (Boolean(diagnostics.error) && !diagnosticsManuallyToggled)
+
+  // A returning user has no cached diagnostic report: perform one real scan.
+  // Never run it again on ordinary device polling or dashboard re-renders.
+  useEffect(() => {
+    if (!diagnostics.report && !diagnostics.isRunning && !diagnostics.error) {
+      void diagnostics.run()
+    }
+  }, [diagnostics.report, diagnostics.isRunning, diagnostics.error, diagnostics.run])
+
+  // Start the brief reveal AFTER the real scan finishes, not while it is pending.
+  // A failed scan stays visible; user-driven disclosure always wins.
+  useEffect(() => {
+    if (
+      initialRevealScheduledRef.current ||
+      diagnostics.isRunning ||
+      (!diagnostics.report && !diagnostics.error)
+    ) return
+
+    initialRevealScheduledRef.current = true
+    // An executed scan may complete successfully yet report an actual failed
+    // runtime/ADB check; do not hide those details automatically.
+    if (diagnostics.error || hasFailedChecks || manuallyToggledRef.current) return
+
+    collapseTimerRef.current = window.setTimeout(() => {
+      if (!manuallyToggledRef.current) setDiagnosticsExpanded(false)
+      collapseTimerRef.current = null
+    }, 2600)
+  }, [diagnostics.report, diagnostics.isRunning, diagnostics.error, hasFailedChecks])
+
+  useEffect(() => () => {
+    if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
+  }, [])
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Keep failed scans visible without synchronously setting React state in an effect.
+    if (diagnostics.error && !diagnostics.isRunning) {
+      if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+      collapseTimerRef.current = null
+    }
+  }, [diagnostics.error, diagnostics.isRunning])
+
+  useEffect(() => {
+    if (rerunCycle === 0 || acknowledgedRerunRef.current === rerunCycle) return
+    acknowledgedRerunRef.current = rerunCycle
+    const failed = Boolean(diagnostics.error)
+    setDiagnosticsFeedback(failed ? 'failed' : hasFailedChecks ? 'issues' : 'finished')
+    if (!failed && !hasFailedChecks && !manuallyToggledRef.current) {
+      if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+      collapseTimerRef.current = window.setTimeout(() => {
+        if (!manuallyToggledRef.current) setDiagnosticsExpanded(false)
+        collapseTimerRef.current = null
+      }, 2600)
+    }
+  }, [rerunCycle, diagnostics.error, hasFailedChecks])
+
+  // Scroll only the terminal viewport, never its ancestor dashboard.
+  useEffect(() => {
+    const viewport = logViewportRef.current
+    if (viewport && logPinnedToBottomRef.current) viewport.scrollTop = viewport.scrollHeight
   }, [logs])
 
-  const handleCopyDiagnostics = async (): Promise<void> => {
-    if (!diagnostics.report) return
+  const handleLogScroll = (): void => {
+    const viewport = logViewportRef.current
+    if (!viewport) return
+    logPinnedToBottomRef.current =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 28
+  }
 
+  const handleToggleDiagnostics = (): void => {
+    manuallyToggledRef.current = true
+    setDiagnosticsManuallyToggled(true)
+    if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+    collapseTimerRef.current = null
+    setDiagnosticsExpanded(!diagnosticsVisible)
+  }
+
+  const handleRerunDiagnostics = async (): Promise<void> => {
+    if (rerunLockRef.current || diagnostics.isRunning) return
+    rerunLockRef.current = true
+    manuallyToggledRef.current = false
+    setDiagnosticsManuallyToggled(false)
+    if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
+    collapseTimerRef.current = null
+    setDiagnosticsExpanded(true)
+    setDiagnosticsFeedback('running')
     try {
-      await navigator.clipboard.writeText(formatDiagnosticReport(diagnostics.report))
-      setReportCopied(true)
-      window.setTimeout(() => setReportCopied(false), 1500)
+      await diagnostics.run()
+    } finally {
+      // useDiagnostics resolves after it publishes the real result or error.
+      setRerunCycle((previous) => previous + 1)
+      rerunLockRef.current = false
+    }
+  }
+
+  const handleCopyDiagnostics = async (): Promise<void> => {
+    if (!diagnostics.report || copyState === 'copying') return
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
+    setCopyState('copying')
+    try {
+      const result = await window.api.copySupportReport(formatDiagnosticReport(diagnostics.report))
+      if (!result.success) throw new Error(result.error ?? 'Failed to copy support report.')
+      setCopyState('success')
     } catch (error) {
       console.warn('Failed to copy diagnostic report.', error)
+      setCopyState('error')
     }
+    copyTimerRef.current = window.setTimeout(() => {
+      setCopyState('idle')
+      copyTimerRef.current = null
+    }, 2600)
   }
 
   const handleExportDiagnostics = async (): Promise<void> => {
@@ -274,7 +394,11 @@ export default function Dashboard({
   }
 
   const handleDeviceTunnelAction = async (device: AdbDevice): Promise<void> => {
-    setDeviceActionId(device.id)
+    if (deviceActionLockRef.current.has(device.id)) return
+    deviceActionLockRef.current.add(device.id)
+    setDeviceActionIds(new Set(deviceActionLockRef.current))
+    setDeviceActionErrors((previous) => ({ ...previous, [device.id]: false }))
+
     try {
       const result =
         device.tunnelStatus === 'connected'
@@ -282,10 +406,15 @@ export default function Dashboard({
           : await window.api.startDeviceTunnel(device.id)
 
       if (!result.success) {
-        console.warn('Per-device tethering action failed.', result.error)
+        // Show a localized error without exposing raw device identifiers from ADB messages.
+        console.warn('Per-device tethering action failed.')
+        setDeviceActionErrors((previous) => ({ ...previous, [device.id]: true }))
       }
+    } catch {
+      setDeviceActionErrors((previous) => ({ ...previous, [device.id]: true }))
     } finally {
-      setDeviceActionId(undefined)
+      deviceActionLockRef.current.delete(device.id)
+      setDeviceActionIds(new Set(deviceActionLockRef.current))
     }
   }
 
@@ -327,12 +456,12 @@ export default function Dashboard({
       </div>
 
       <div className="custom-scrollbar flex flex-col gap-4 overflow-y-auto p-4">
-        <div className="flex items-center justify-between rounded-sm border border-border-subtle bg-bg-primary p-4 theme-transition">
-          <div className="min-w-0 pr-4">
+        <div className="flex flex-col gap-3 rounded-sm border border-border-subtle bg-bg-primary p-4 theme-transition md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0 md:pr-4">
             <h2 className="text-sm font-semibold text-text-primary">Wirebound Engine</h2>
             <p className="mt-1 text-xs text-text-secondary">{t.onboardingDesc}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 md:shrink-0">
             <button
               onClick={handleOpenDesktopSpeedTest}
               className="group flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-surface px-3 py-1.5 text-xs text-text-secondary transition-all duration-200 hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus active:scale-[0.96]"
@@ -371,8 +500,8 @@ export default function Dashboard({
           </div>
         </div>
 
-        <div
-          className={`flex items-start gap-3 rounded-sm border p-3 theme-transition ${
+        {(!readyDismissed || setupState.tone !== 'ready') && <div
+          className={`flex items-center gap-2 rounded-sm border px-3 py-2 theme-transition ${
             setupState.tone === 'active' || setupState.tone === 'ready'
               ? 'border-accent-green/30 bg-accent-green-dim/40 dark:bg-accent-green-dim/20'
               : setupState.tone === 'error'
@@ -381,8 +510,8 @@ export default function Dashboard({
           }`}
         >
           <SetupIcon
-            size={18}
-            className={`mt-0.5 shrink-0 ${
+            size={16}
+            className={`shrink-0 ${
               setupState.tone === 'active' || setupState.tone === 'ready'
                 ? 'text-accent-green'
                 : setupState.tone === 'error'
@@ -390,33 +519,44 @@ export default function Dashboard({
                   : 'text-accent-yellow'
             }`}
           />
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-text-primary">{setupState.title}</div>
-            <p className="mt-1 text-xs leading-relaxed text-text-secondary">
-              {setupState.description}
-            </p>
+          <div className="min-w-0 flex-1 text-xs">
+            <span className="font-semibold text-text-primary">{setupState.title}</span>
+            <span className="ml-2 text-text-secondary">{setupState.description}</span>
             {adbError && (
               <p className="mt-1 break-all font-mono text-[10px] text-accent-red/80">{adbError}</p>
             )}
           </div>
-        </div>
+          {setupState.tone === 'ready' && (
+            <button type="button" onClick={() => setReadyDismissed(true)}
+              aria-label={t.dismissNotice}
+              className="ml-auto shrink-0 rounded-sm p-1 text-text-muted hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
+              <X size={14} />
+            </button>
+          )}
+        </div>}
 
         <div className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Stethoscope size={14} className="text-accent-blue" />
-              <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                {t.diagnostics}
+            <div className="flex min-w-0 items-center gap-2">
+              <Stethoscope size={14} className="shrink-0 text-accent-blue" />
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted">{t.diagnostics}</div>
+                {diagnostics.report && (
+                  <p className="mt-0.5 text-[10px] text-text-secondary">
+                    {diagnostics.report.checks.filter((check) => check.status === 'pass').length}/{diagnostics.report.checks.length} {t.diagnosticsPassed}
+                  </p>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
               <button
                 onClick={() => void handleCopyDiagnostics()}
-                disabled={!diagnostics.report}
+                disabled={!diagnostics.report || copyState === 'copying'}
+                title={t.copyReportHelp}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <ClipboardCopy size={12} />
-                {reportCopied ? t.reportCopied : t.copyReport}
+                {copyState === 'success' ? <CheckCircle2 size={12} /> : <ClipboardCopy size={12} />}
+                {copyState === 'copying' ? t.copyingReport : copyState === 'success' ? t.reportCopied : t.copyReport}
               </button>
               <button
                 onClick={() => void handleExportDiagnostics()}
@@ -427,16 +567,43 @@ export default function Dashboard({
                 {reportExported ? t.reportExported : t.exportReport}
               </button>
               <button
-                onClick={() => void diagnostics.run()}
+                onClick={() => void handleRerunDiagnostics()}
                 disabled={diagnostics.isRunning}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-accent-blue/30 bg-accent-blue/10 px-2.5 py-1 text-[10px] font-semibold text-accent-blue transition-colors hover:bg-accent-blue/15 disabled:opacity-50"
               >
-                <RefreshCw size={12} className={diagnostics.isRunning ? 'animate-spin' : ''} />
+                <RefreshCw size={12} className={diagnostics.isRunning ? 'motion-safe:animate-spin' : ''} />
                 {diagnostics.report ? t.rerunDiagnostics : t.runDiagnostics}
+              </button>
+              <button type="button" onClick={handleToggleDiagnostics}
+                aria-expanded={diagnosticsVisible} aria-controls="wirebound-diagnostic-details"
+                className="inline-flex items-center gap-1 rounded-sm border border-border-subtle bg-bg-primary px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
+                {diagnosticsVisible ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                {diagnosticsVisible ? t.diagnosticsHide : t.diagnosticsShow}
               </button>
             </div>
           </div>
 
+          <div role="status" aria-live="polite" aria-atomic="true" className="mt-1 text-[11px] text-text-secondary">
+            {diagnostics.isRunning || diagnosticsFeedback === 'running' ? (
+              <span className="inline-flex items-center gap-1.5 text-accent-blue">
+                <RefreshCw size={12} className="motion-safe:animate-spin" /> {t.diagnosticsChecking}
+              </span>
+            ) : diagnosticsFeedback === 'finished' ? t.diagnosticsFinished
+              : diagnosticsFeedback === 'issues' ? t.diagnosticsIssues
+                : diagnosticsFeedback === 'failed' ? t.diagnosticsFailed : null}
+            {copyState === 'success' && (
+              <span className="ml-2 inline-flex items-center gap-1 text-accent-green"><CheckCircle2 size={12} />{t.reportCopySuccess}</span>
+            )}
+            {copyState === 'error' && (
+              <span className="ml-2 text-accent-red">{t.reportCopyFailed}</span>
+            )}
+          </div>
+          {diagnostics.isRunning && (
+            <div aria-hidden="true" className="mt-2 h-0.5 overflow-hidden rounded-sm bg-bg-primary">
+              <div className="h-full w-1/3 bg-accent-blue motion-safe:animate-shimmer" />
+            </div>
+          )}
+          <div id="wirebound-diagnostic-details" hidden={!diagnosticsVisible}>
           {!diagnostics.report && !diagnostics.error && (
             <p className="mt-2 text-xs text-text-secondary">{t.diagnosticsIdle}</p>
           )}
@@ -447,7 +614,7 @@ export default function Dashboard({
           )}
           {diagnostics.report && (
             <>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <div className={`mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3 ${diagnostics.isRunning ? 'opacity-65' : ''}`}>
                 {diagnostics.report.checks.map((check) => (
                   <div
                     key={check.id}
@@ -484,16 +651,15 @@ export default function Dashboard({
                     {t.diagnosticDevices}
                   </div>
                   {diagnostics.report.devices.map((device) => (
-                    <div
-                      key={device.id}
-                      className="text-[10px] leading-relaxed text-text-secondary"
-                    >
-                      <span className="font-semibold text-text-primary">{device.name}</span> Â·{' '}
-                      {device.id} Â· {getDeviceStatusLabel(device.status, t)}
-                      {device.androidVersion &&
-                        ` Â· Android ${device.androidVersion} / API ${device.apiLevel ?? '?'}`}
-                      {device.status === 'device' &&
-                        ` Â· ${t.gnirehtetInstalled}: ${device.gnirehtetInstalled ? t.yes : t.no} Â· ${t.gnirehtetActive}: ${device.gnirehtetActive ? t.yes : t.no}`}
+                    <div key={device.id} className="mt-2 rounded-sm border border-border-subtle bg-bg-primary p-2.5">
+                      <div className="break-words text-xs font-semibold text-text-primary">{device.name || '--'}</div>
+                      <div className="mt-2 grid gap-x-4 gap-y-1 text-[11px] text-text-secondary sm:grid-cols-2 xl:grid-cols-3">
+                        <div><span className="text-text-muted">{t.deviceId}:</span> <span className="break-all font-mono">{maskDeviceId(device.id)}</span></div>
+                        <div><span className="text-text-muted">{t.deviceStatus}:</span> {getDeviceStatusLabel(device.status, t)}</div>
+                        <div><span className="text-text-muted">{t.diagAndroidVersion}:</span> {device.androidVersion ? `Android ${device.androidVersion} / API ${device.apiLevel ?? '?'}` : '--'}</div>
+                        <div><span className="text-text-muted">{t.gnirehtetInstalled}:</span> {device.status === 'device' ? device.gnirehtetInstalled ? t.yes : t.no : '--'}</div>
+                        <div><span className="text-text-muted">{t.gnirehtetActive}:</span> {device.status === 'device' ? device.gnirehtetActive ? t.yes : t.no : '--'}</div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -501,10 +667,11 @@ export default function Dashboard({
 
               <p className="mt-2 text-[9px] text-text-muted">
                 {t.diagnosticsGenerated}:{' '}
-                {new Date(diagnostics.report.generatedAt).toLocaleString()}
+                {formatUiTimestamp(diagnostics.report.generatedAt, language)}
               </p>
             </>
           )}
+          </div>
         </div>
 
         <div>
@@ -521,138 +688,67 @@ export default function Dashboard({
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-sm border border-border-subtle bg-bg-surface theme-transition">
-            <table className="w-full min-w-[920px] border-collapse text-left text-xs">
-              <thead className="border-b border-border-subtle bg-bg-primary">
-                <tr>
-                  <th className="w-28 px-3 py-2 font-semibold text-text-muted">{t.deviceStatus}</th>
-                  <th className="w-28 px-3 py-2 font-semibold text-text-muted">{t.tunnelStatus}</th>
-                  <th className="px-3 py-2 font-semibold text-text-muted">{t.deviceId}</th>
-                  <th className="px-3 py-2 font-semibold text-text-muted">{t.model}</th>
-                  <th className="w-24 px-3 py-2 font-semibold text-text-muted">{t.power}</th>
-                  <th className="w-40 px-3 py-2 font-semibold text-text-muted">{t.traffic}</th>
-                  <th className="w-56 px-3 py-2 text-right font-semibold text-text-muted">
-                    {t.actions}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.map((device) => (
-                  <tr
-                    key={device.id}
-                    className="group border-b border-border-subtle/50 transition-colors hover:bg-bg-primary"
-                  >
-                    <td className="px-3 py-1.5">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-semibold ${
-                          device.status === 'device'
-                            ? 'border-accent-green/30 bg-accent-green-dim/40 text-accent-green'
-                            : device.status === 'unauthorized' || device.status === 'no permissions'
-                              ? 'border-accent-red/30 bg-accent-red-dim/40 text-accent-red'
-                              : 'border-accent-yellow/30 bg-amber-50 text-amber-700 dark:bg-yellow-950/20 dark:text-accent-yellow'
-                        }`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            device.status === 'device'
-                              ? 'bg-accent-green'
-                              : device.status === 'unauthorized' ||
-                                  device.status === 'no permissions'
-                                ? 'bg-accent-red'
-                                : 'bg-accent-yellow'
-                          }`}
-                        />
-                        {getDeviceStatusLabel(device.status, t)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[10px] font-semibold ${getTunnelStatusClass(device.tunnelStatus)}`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            device.tunnelStatus === 'connected'
-                              ? 'bg-accent-green'
-                              : device.tunnelStatus === 'waiting'
-                                ? 'bg-accent-yellow'
-                                : device.tunnelStatus === 'error'
-                                  ? 'bg-accent-red'
-                                  : 'bg-text-muted'
-                          }`}
-                        />
-                        {getTunnelStatusLabel(device.tunnelStatus, t)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5 font-mono text-text-muted">{device.id}</td>
-                    <td className="px-3 py-1.5 font-medium text-text-primary transition-colors group-hover:text-accent-blue">
-                      {device.name || 'Unknown'}
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex items-center gap-1 text-text-muted">
-                        <Battery size={12} />
-                        {device.battery ? `${device.battery}%` : '--'}
-                      </div>
-                    </td>
-                    <td
-                      className="px-3 py-1.5 font-mono text-[10px] text-text-secondary"
-                      title={
-                        device.traffic
-                          ? `${device.traffic.interfaceName} kernel counters`
-                          : t.trafficUnavailable
-                      }
-                    >
-                      <div className="whitespace-nowrap">
-                        <span className="text-text-muted">RX</span>{' '}
-                        {formatBytes(device.traffic?.rxBytes)}
-                      </div>
-                      <div className="whitespace-nowrap">
-                        <span className="text-text-muted">TX</span>{' '}
-                        {formatBytes(device.traffic?.txBytes)}
-                      </div>
-                    </td>
-                    <td className="px-3 py-1.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => void handleDeviceTunnelAction(device)}
-                          disabled={
-                            device.status !== 'device' ||
-                            (!isRunning && !isConnecting) ||
-                            deviceActionId === device.id
-                          }
-                          className={`inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[10px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
-                            device.tunnelStatus === 'connected'
-                              ? 'border-accent-red/30 bg-accent-red-dim/20 text-accent-red hover:bg-accent-red-dim/40'
-                              : 'border-accent-blue/30 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/15'
-                          }`}
-                        >
-                          {device.tunnelStatus === 'connected' ? (
-                            <Unplug size={12} />
-                          ) : (
-                            <Link2 size={12} />
-                          )}
-                          {deviceActionId === device.id
-                            ? t.deviceActionWorking
-                            : device.tunnelStatus === 'connected'
-                              ? t.disconnectDevice
-                              : t.retryDevice}
-                        </button>
-                        <button
-                          onClick={() => handleOpenDeviceSpeedTest(device.id)}
-                          disabled={device.tunnelStatus !== 'connected'}
-                          className="group/btn inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-all hover:border-accent-blue/50 hover:bg-accent-blue/10 hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <Zap
-                            size={12}
-                            className="text-text-muted transition-transform group-hover/btn:scale-110"
-                          />
-                          {t.testDeviceSpeed}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            {devices.map((device) => (
+              <article key={device.id} className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="break-words text-xs font-semibold text-text-primary">{device.name || 'Unknown'}</h3>
+                    <p className="mt-1 break-all font-mono text-[10px] text-text-muted">
+                      {t.deviceId}: {maskDeviceId(device.id)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={'inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-semibold ' +
+                      (device.status === 'device'
+                        ? 'border-accent-green/30 bg-accent-green-dim/40 text-accent-green'
+                        : device.status === 'unauthorized' || device.status === 'no permissions'
+                          ? 'border-accent-red/30 bg-accent-red-dim/40 text-accent-red'
+                          : 'border-accent-yellow/30 bg-amber-50 text-amber-700 dark:bg-yellow-950/20 dark:text-accent-yellow')}>
+                      {t.deviceStatus}: {getDeviceStatusLabel(device.status, t)}
+                    </span>
+                    <span className={'inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-semibold ' +
+                      getTunnelStatusClass(device.tunnelStatus)}>
+                      {t.tunnelStatus}: {getTunnelStatusLabel(device.tunnelStatus, t)}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-2">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-secondary">
+                    <span className="inline-flex items-center gap-1"><Battery size={12} />
+                      {t.power}: {device.battery !== undefined && device.battery !== '' ? device.battery + '%' : '--'}
+                    </span>
+                    <span title={device.traffic ? device.traffic.interfaceName + ' kernel counters' : t.trafficUnavailable}
+                      className="font-mono">
+                      RX {formatBytes(device.traffic?.rxBytes)} / TX {formatBytes(device.traffic?.txBytes)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button type="button" onClick={() => void handleDeviceTunnelAction(device)}
+                      disabled={device.status !== 'device' || (!isRunning && !isConnecting) || deviceActionIds.has(device.id)}
+                      className={'inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:cursor-not-allowed disabled:opacity-40 ' +
+                        (device.tunnelStatus === 'connected'
+                          ? 'border-accent-red/30 bg-accent-red-dim/20 text-accent-red hover:bg-accent-red-dim/40'
+                          : 'border-accent-blue/30 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/15')}>
+                      {device.tunnelStatus === 'connected' ? <Unplug size={12} /> : <Link2 size={12} />}
+                      {deviceActionIds.has(device.id) ? t.deviceActionWorking
+                        : device.tunnelStatus === 'connected' ? t.disconnectDevice : t.retryDevice}
+                    </button>
+                    <button type="button" onClick={() => handleOpenDeviceSpeedTest(device.id)}
+                      disabled={device.tunnelStatus !== 'connected'}
+                      className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:border-accent-blue/50 hover:text-accent-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:cursor-not-allowed disabled:opacity-40">
+                      <Zap size={12} />
+                      {t.testDeviceSpeed}
+                    </button>
+                  </div>
+                </div>
+                {deviceActionErrors[device.id] && (
+                  <p role="alert" className="mt-2 text-[11px] text-accent-red">
+                    {t.deviceActionFailed}
+                  </p>
+                )}
+              </article>
+            ))}
             {devices.length === 0 && (
               <div className="p-4 text-center text-xs text-text-muted">
                 {adbError ? t.adbUnavailable : t.noDevice}
@@ -668,12 +764,14 @@ export default function Dashboard({
             </div>
             <button
               onClick={onClearLogs}
-              className="text-[10px] font-bold uppercase text-text-muted transition-colors hover:text-accent-red"
+              disabled={logs.length === 0}
+              title={logs.length === 0 ? t.noLogsToClear : t.clear}
+              className="text-[10px] font-bold uppercase text-text-muted transition-colors hover:text-accent-red disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-muted"
             >
               {t.clear}
             </button>
           </div>
-          <div className="custom-scrollbar h-48 overflow-y-auto rounded-sm border border-border-subtle bg-bg-primary p-3 font-mono text-[10px]">
+          <div ref={logViewportRef} onScroll={handleLogScroll} className="custom-scrollbar h-48 overflow-y-auto rounded-sm border border-border-subtle bg-bg-primary p-3 font-mono text-[10px]">
             {logs.length === 0 ? (
               <div className="flex h-full items-center justify-center text-text-muted italic">
                 {t.noLogsYet}
@@ -689,7 +787,7 @@ export default function Dashboard({
                     <span className="break-all">{log.message}</span>
                   </div>
                 ))}
-                <div ref={logEndRef} />
+
               </div>
             )}
           </div>
