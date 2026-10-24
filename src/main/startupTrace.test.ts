@@ -152,6 +152,8 @@ describe('opt-in Electron startup timeline', () => {
     expect(pulses.every((pulse) => pulse.event === 'main-loop-heartbeat')).toBe(true)
     expect(pulses.every((pulse) => typeof pulse.tick === 'number')).toBe(true)
     expect(pulses.every((pulse) => typeof pulse.delayMs === 'number')).toBe(true)
+    expect(pulses.every((pulse) => typeof pulse.cpuUserMs === 'number' && Number(pulse.cpuUserMs) >= 0)).toBe(true)
+    expect(pulses.every((pulse) => typeof pulse.cpuSystemMs === 'number' && Number(pulse.cpuSystemMs) >= 0)).toBe(true)
     expect(pulses.every((pulse) => !('path' in pulse) && !('deviceId' in pulse))).toBe(true)
 
     const countAtTimeout = pulses.length
