@@ -77,7 +77,7 @@ $modernCases = @(
   },
   [pscustomobject]@{
     name = 'New trace: mounted UI mark before window show succeeds'
-    events = @((MarkEvent 'renderer-timing-early' 1 156), (Event 'window-shown'))
+    events = @((MarkEvent 'renderer-root-probe' 1 156), (Event 'window-shown'))
     expected = $true
   },
   [pscustomobject]@{
@@ -97,7 +97,7 @@ $modernCases = @(
   },
   [pscustomobject]@{
     name = 'New trace: QA-initiated kill after UI success cannot undo pass'
-    events = @((Event 'window-shown'), (MarkEvent 'renderer-timing-early' 1 210), (Event 'render-process-gone'))
+    events = @((Event 'window-shown'), (MarkEvent 'renderer-root-probe' 1 210), (Event 'render-process-gone'))
     expected = $true
   }
 )
@@ -112,3 +112,11 @@ foreach ($case in $modernCases) {
   Write-Output ("PASS: {0}" -f $case.name)
 }
 Write-Output ("READINESS_MODERN_CASES={0} FAILURES=0" -f $modernCases.Count)
+
+# Early probes are for diagnostics. A full renderer-root-probe must be retained
+# for backwards-compatible reports and consumers.
+$earlyOnly = Get-WireboundStartupReadiness -Events @(
+  (Event 'window-shown'), (MarkEvent 'renderer-timing-early' 1 300)
+)
+if ($earlyOnly.ready) { throw 'FAIL: early-only renderer probe prematurely reported success' }
+Write-Output 'PASS: Early probe cannot prematurely terminate QA before full probe'
