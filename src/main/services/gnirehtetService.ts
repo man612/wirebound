@@ -32,6 +32,11 @@ export class GnirehtetService {
   private status: ConnectionStatus = 'disconnected'
   private isStopping = false
   private lastAdbError: string | null = null
+  private startPromise: Promise<ActionResult> | null = null
+  private stopPromise: Promise<ActionResult> | null = null
+  private unexpectedExitCleanup: Promise<void> | null = null
+  private lifecycleGeneration = 0
+  private readonly requestedStops = new WeakSet<ChildProcessWithoutNullStreams>()
 
   public constructor(
     private readonly paths: RuntimePaths,
@@ -47,13 +52,43 @@ export class GnirehtetService {
     return this.status
   }
 
-  public async start(dnsInput: string, portInput: string): Promise<ActionResult> {
-    if (this.childProcess) {
-      await this.syncStatusWithDeviceState()
-      this.sendLog('Wirebound engine is already running.', 'info')
-      return { success: true }
+  public start(dnsInput: string, portInput: string): Promise<ActionResult> {
+    if (this.startPromise) return this.startPromise
+    if (this.isStopping) {
+      return Promise.resolve({ success: false, error: 'Wirebound engine is stopping.' })
     }
 
+    if (this.childProcess) {
+      const childProcess = this.childProcess
+      if (this.requestedStops.has(childProcess)) {
+        return Promise.resolve({
+          success: false, error: 'Previous Wirebound engine has not confirmed shutdown.'
+        })
+      }
+      return this.syncStatusWithDeviceState().then(() => {
+        if (this.isStopping || this.childProcess !== childProcess) {
+          return { success: false, error: 'Wirebound engine start was cancelled.' }
+        }
+        this.sendLog('Wirebound engine is already running.', 'info')
+        return { success: true }
+      })
+    }
+
+    const generation = ++this.lifecycleGeneration
+    const pending = this.launchRelay(dnsInput, portInput, generation)
+    this.startPromise = pending
+    void pending.then(
+      () => { if (this.startPromise === pending) this.startPromise = null },
+      () => { if (this.startPromise === pending) this.startPromise = null }
+    )
+    return pending
+  }
+
+  private async launchRelay(
+    dnsInput: string,
+    portInput: string,
+    generation: number
+  ): Promise<ActionResult> {
     if (!this.fileExists(this.paths.gnirehtetExe)) {
       return this.fail(`Gnirehtet runtime not found: ${this.paths.gnirehtetExe}`)
     }
@@ -61,13 +96,19 @@ export class GnirehtetService {
     const dns = normalizeDns(dnsInput)
     const port = normalizePort(portInput)
 
-    this.isStopping = false
     this.lastAdbError = null
     this.setStatus('connecting')
     this.sendLog(`Starting Wirebound engine (DNS: ${dns}, Port: ${port})`)
 
     try {
+      // A previous relay's unexpected-exit cleanup must finish before a new
+      // autorun relay may create Android clients or ADB reverse mappings.
+      if (this.unexpectedExitCleanup) await this.unexpectedExitCleanup
       await this.adbService.ensureServerReady()
+      if (generation !== this.lifecycleGeneration || this.isStopping) {
+        return { success: false, error: 'Wirebound engine start was cancelled.' }
+      }
+
       const childProcess = this.spawnProcess(this.paths.gnirehtetExe, ['autorun', '-d', dns, '-p', port], {
         cwd: this.paths.gnirehtetDir,
         env: {
@@ -78,10 +119,12 @@ export class GnirehtetService {
       })
 
       this.childProcess = childProcess
-      this.attachProcessEvents(childProcess)
+      this.attachProcessEvents(childProcess, generation)
       return { success: true }
     } catch (error) {
-      this.childProcess = null
+      if (generation !== this.lifecycleGeneration || this.isStopping) {
+        return { success: false, error: 'Wirebound engine start was cancelled.' }
+      }
       return this.fail(readError(error, 'Failed to start Gnirehtet.'))
     }
   }
@@ -138,22 +181,37 @@ export class GnirehtetService {
     }
   }
 
-  public async stop(): Promise<ActionResult> {
-    if (this.isStopping) {
-      return { success: true }
-    }
+  public stop(): Promise<ActionResult> {
+    if (this.stopPromise) return this.stopPromise
 
+    // Invalidate every Start that has passed its first check but is still
+    // awaiting ADB or cleanup. A new Start must never cross this Stop.
+    this.lifecycleGeneration += 1
+    this.startPromise = null
     this.isStopping = true
+    const pending = this.stopRelay()
+    this.stopPromise = pending
+    void pending.then(
+      () => { if (this.stopPromise === pending) this.stopPromise = null },
+      () => { if (this.stopPromise === pending) this.stopPromise = null }
+    )
+    return pending
+  }
+
+  private async stopRelay(): Promise<ActionResult> {
     this.sendLog('Stopping Wirebound engine...')
 
     try {
       if (this.childProcess) {
         const processToStop = this.childProcess
+        this.requestedStops.add(processToStop)
         processToStop.kill()
 
         const closed = await this.waitForProcessClose(processToStop)
-        if (!closed) {
-          this.sendLog('Engine did not confirm shutdown within 2 seconds.', 'stderr')
+        if (!closed && this.childProcess === processToStop) {
+          // Do not pretend it stopped, lose the last reference, or spawn a
+          // replacement while a native relay could still be running.
+          return this.fail('Engine did not confirm shutdown within 2 seconds.')
         }
 
         if (this.childProcess === processToStop) {
@@ -247,41 +305,53 @@ export class GnirehtetService {
     })
   }
 
-  private attachProcessEvents(childProcess: ChildProcessWithoutNullStreams): void {
+  private attachProcessEvents(
+    childProcess: ChildProcessWithoutNullStreams,
+    generation: number
+  ): void {
     childProcess.stdout.on('data', (data) => this.handleOutput(data, 'stdout'))
     childProcess.stderr.on('data', (data) => this.handleOutput(data, 'stderr'))
 
     childProcess.on('error', (error) => {
-      if (this.childProcess === childProcess) {
-        this.childProcess = null
-      }
+      if (this.childProcess !== childProcess) return
+      if (this.requestedStops.has(childProcess)) return
+      this.childProcess = null
       this.fail(readError(error, 'Gnirehtet process failed.'))
     })
 
     childProcess.on('close', (code) => {
-      if (this.childProcess === childProcess) {
-        this.childProcess = null
-      }
+      if (this.childProcess !== childProcess) return
+      this.childProcess = null
+      if (this.requestedStops.has(childProcess) || this.isStopping) return
 
-      if (!this.isStopping) {
-        void this.handleUnexpectedClose(code)
-      }
+      const cleanup = this.handleUnexpectedClose(code, generation)
+      this.unexpectedExitCleanup = cleanup
+      void cleanup.then(
+        () => { if (this.unexpectedExitCleanup === cleanup) this.unexpectedExitCleanup = null },
+        () => { if (this.unexpectedExitCleanup === cleanup) this.unexpectedExitCleanup = null }
+      )
     })
   }
 
-  private async handleUnexpectedClose(code: number | null): Promise<void> {
+  private async handleUnexpectedClose(code: number | null, generation: number): Promise<void> {
+    // Obsolete children must never change a later relay's status.
+    if (generation !== this.lifecycleGeneration || this.childProcess || this.isStopping) return
+
     try {
       const stoppedClients = await this.adbService.stopAllClients()
+      if (generation !== this.lifecycleGeneration || this.childProcess || this.isStopping) return
       if (stoppedClients > 0) {
         this.sendLog(`Cleaned ${stoppedClients} Android client(s) after relay exit.`, 'info')
       }
     } catch (error) {
+      if (generation !== this.lifecycleGeneration || this.childProcess || this.isStopping) return
       this.sendLog(
         `Could not clean Android clients: ${readError(error, 'Unknown ADB error')}`,
         'stderr'
       )
     }
 
+    if (generation !== this.lifecycleGeneration || this.childProcess || this.isStopping) return
     const exitCode = code ?? 'unknown'
     if (code === 0) {
       this.sendLog(`Engine exited with code ${exitCode}.`, 'info')
