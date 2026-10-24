@@ -40,27 +40,33 @@ export function createMainWindow(paths: RuntimePaths): BrowserWindow {
     traceStartup('did-finish-load')
     if (!startupTraceEnabled) return
 
-    // A failed React mount may still have a loaded HTML document. Inspect only
-    // DOM readiness and child count, never text, settings or device identifiers.
-    setTimeout(() => {
+    // Numeric navigation-relative milestones only. No DOM text, settings,
+    // URLs, paths, or device identity are read or stored.
+    const probe = (eventName: 'renderer-timing-early' | 'renderer-root-probe'): void => {
       if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
       void mainWindow.webContents
         .executeJavaScript(
-          "(() => { const paint = performance.getEntriesByType('paint'); const at = (name) => Math.round(paint.find((entry) => entry.name === name)?.startTime ?? -1); return { rootChildren: document.getElementById('root')?.childElementCount ?? -1, readyState: document.readyState, firstPaintMs: at('first-paint'), firstContentfulPaintMs: at('first-contentful-paint') }; })()"
+          "(() => { const entries = performance.getEntriesByType('paint'); const marks = performance.getEntriesByType('mark'); const nav = performance.getEntriesByType('navigation')[0]; const at = (list, name) => Math.round(list.find((e) => e.name === name)?.startTime ?? -1); return { rootChildren: document.getElementById('root')?.childElementCount ?? -1, readyState: document.readyState, firstPaintMs: at(entries, 'first-paint'), firstContentfulPaintMs: at(entries, 'first-contentful-paint'), entryEvaluatedMs: at(marks, 'wirebound:entry-evaluated'), reactFirstCommitMs: at(marks, 'wirebound:react-first-commit'), uiSettingsReadyMs: at(marks, 'wirebound:ui-settings-ready'), responseEndMs: nav ? Math.round(nav.responseEnd) : -1, domInteractiveMs: nav ? Math.round(nav.domInteractive) : -1 }; })()"
         )
-        .then((result: { rootChildren: number; readyState: string; firstPaintMs: number; firstContentfulPaintMs: number }) => {
-          traceStartup('renderer-root-probe', {
-            rootChildren: result.rootChildren,
-            readyState: result.readyState,
-            visible: mainWindow.isVisible(),
-            // Navigation-relative Chromium paint timing; -1 = metric unavailable.
-            // Never includes DOM text, paths, device identifiers or URLs.
-            firstPaintMs: result.firstPaintMs,
-            firstContentfulPaintMs: result.firstContentfulPaintMs
-          })
+        .then((result: {
+          rootChildren: number
+          readyState: string
+          firstPaintMs: number
+          firstContentfulPaintMs: number
+          entryEvaluatedMs: number
+          reactFirstCommitMs: number
+          uiSettingsReadyMs: number
+          responseEndMs: number
+          domInteractiveMs: number
+        }) => {
+          traceStartup(eventName, { ...result, visible: mainWindow.isVisible() })
         })
         .catch(() => traceStartup('renderer-root-probe-failed'))
-    }, 2000)
+    }
+    // An early sample helps distinguish Chromium/ESM work from React mount;
+    // retain the original 2s probe for existing QA readiness assertions.
+    setTimeout(() => probe('renderer-timing-early'), 250)
+    setTimeout(() => probe('renderer-root-probe'), 2000)
   })
   mainWindow.webContents.on('did-stop-loading', () => traceStartup('did-stop-loading'))
   mainWindow.webContents.on('unresponsive', () => traceStartup('renderer-unresponsive'))
