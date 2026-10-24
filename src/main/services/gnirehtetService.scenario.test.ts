@@ -181,4 +181,66 @@ describe('GnirehtetService lifecycle scenarios', () => {
     expect(stopAllClients).toHaveBeenCalledOnce()
     expect(service.getStatus()).toBe('error')
   })
+
+  it('redacts a serial split between native stderr chunks before forwarding logs', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const { adb } = createAdbDouble()
+    const logs: Array<{ message: string; type?: string }> = []
+    const service = new GnirehtetService(
+      paths, adb, (message, type) => logs.push({ message, type }), vi.fn(), spawnProcess, () => true
+    )
+
+    await service.start('8.8.8.8', '31416')
+    child.stderr.write('2026 ERROR Main: Command adb ["-s", "SYN')
+    expect(logs.some((log) => log.message.includes('SYN'))).toBe(false)
+    child.stderr.write('THETIC-A1", "shell"] returned with value 1\n')
+
+    const failure = logs.find((log) => log.message.includes('returned with value 1'))
+    expect(failure?.type).toBe('stderr')
+    expect(failure?.message).toContain('SY...A1')
+    expect(failure?.message).not.toContain('SYNTHETIC-A1')
+  })
+
+  it('flushes native incomplete lines on child close and keeps stdout separate', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const { adb } = createAdbDouble()
+    const logs: Array<{ message: string; type?: string }> = []
+    const service = new GnirehtetService(
+      paths, adb, (message, type) => logs.push({ message, type }), vi.fn(), spawnProcess, () => true
+    )
+
+    await service.start('8.8.8.8', '31416')
+    child.stdout.write('Relay server started\n')
+    child.stderr.write("adb: device 'SYNTHETIC-B2' not found")
+    child.emit('close', 0)
+    await Promise.resolve()
+
+    expect(logs.some((log) => log.message === 'Relay server started' && log.type === 'stdout')).toBe(true)
+    const stderr = logs.find((log) => log.message.includes('not found'))
+    expect(stderr?.type).toBe('stderr')
+    expect(stderr?.message).toContain('SY...B2')
+    expect(stderr?.message).not.toContain('SYNTHETIC-B2')
+  })
+
+  it('masks a known device ID in an otherwise unstructured per-device failure', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const runner = vi.fn().mockRejectedValue(new Error('Command failed for SYNTHETIC-C3'))
+    const { adb } = createAdbDouble()
+    const logs: string[] = []
+    const service = new GnirehtetService(
+      paths, adb, (message) => logs.push(message), vi.fn(), spawnProcess, () => true, runner
+    )
+
+    await service.start('8.8.8.8', '31416')
+    const result = await service.startDevice('SYNTHETIC-C3', '8.8.8.8', '31416')
+    expect(result.success).toBe(false)
+    // Returned ActionResult still contains the raw upstream error, but UI service
+    // logs must redact it. Cross-IPC error exposure needs independent review.
+    expect(logs.join('\n')).not.toContain('SYNTHETIC-C3')
+    expect(logs.join('\n')).toContain('SY...C3')
+  })
+
 })
