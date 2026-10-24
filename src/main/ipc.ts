@@ -18,8 +18,7 @@ import { checkForUpdates } from './services/updateService'
 import { getCrashTelemetryState } from './services/telemetryService'
 
 interface IpcDependencies {
-  adbService: AdbService
-  gnirehtetService: GnirehtetService
+  getServices: () => Promise<{ adb: AdbService; engine: GnirehtetService }>
   getDeviceSnapshot: () => Promise<AdbSnapshot>
   getMainWindow: () => BrowserWindow | null
   hideToTray: () => void
@@ -141,8 +140,7 @@ async function openExternal(url: unknown): Promise<ActionResult> {
 }
 
 export function registerIpcHandlers({
-  adbService,
-  gnirehtetService,
+  getServices,
   getDeviceSnapshot,
   getMainWindow,
   hideToTray,
@@ -153,32 +151,32 @@ export function registerIpcHandlers({
 
   ipcMain.handle('gnirehtet:start', (event, dns: unknown, port: unknown) => {
     trusted(event)
-    return gnirehtetService.start(readString(dns, '8.8.8.8'), readString(port, '31416'))
+    return getServices().then(({ engine }) =>
+      engine.start(readString(dns, '8.8.8.8'), readString(port, '31416'))
+    )
   })
 
   ipcMain.handle('gnirehtet:stop', (event) => {
     trusted(event)
-    return gnirehtetService.stop()
+    return getServices().then(({ engine }) => engine.stop())
   })
 
   ipcMain.handle('gnirehtet:device-start', (event, deviceId: unknown) => {
     trusted(event)
     const settings = loadSettings()
-    return gnirehtetService.startDevice(
-      readString(deviceId),
-      selectedDns(settings),
-      settings.port
+    return getServices().then(({ engine }) =>
+      engine.startDevice(readString(deviceId), selectedDns(settings), settings.port)
     )
   })
 
   ipcMain.handle('gnirehtet:device-stop', (event, deviceId: unknown) => {
     trusted(event)
-    return gnirehtetService.stopDevice(readString(deviceId))
+    return getServices().then(({ engine }) => engine.stopDevice(readString(deviceId)))
   })
 
   ipcMain.handle('gnirehtet:status', (event) => {
     trusted(event)
-    return gnirehtetService.getStatus()
+    return getServices().then(({ engine }) => engine.getStatus())
   })
 
   ipcMain.handle('adb:snapshot', (event) => {
@@ -188,7 +186,7 @@ export function registerIpcHandlers({
 
   ipcMain.handle('adb:testSpeed', (event, deviceId: unknown) => {
     trusted(event)
-    return adbService.openSpeedTest(readString(deviceId))
+    return getServices().then(({ adb }) => adb.openSpeedTest(readString(deviceId)))
   })
 
   ipcMain.handle('settings:get', (event) => {
@@ -227,7 +225,8 @@ export function registerIpcHandlers({
 
   ipcMain.handle('app:diagnostics', async (event) => {
     trusted(event)
-    const report = await adbService.getDiagnostics(gnirehtetService.getStatus())
+    const { adb, engine } = await getServices()
+    const report = await adb.getDiagnostics(engine.getStatus())
     return {
       ...report,
       appVersion: app.getVersion(),
