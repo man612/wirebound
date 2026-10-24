@@ -76,16 +76,24 @@ export function startStartupHeartbeat(): NodeJS.Timeout | null {
   if (!startupTraceEnabled) return null
 
   let previous = performance.now()
+  let previousCpu = process.cpuUsage()
   const started = previous
   let ticks = 0
   const timer = setInterval(() => {
     const now = performance.now()
+    // Per-process CPU time, not system-wide CPU and not child-process CPU.
+    // A delayed heartbeat with low CPU can indicate waiting, blocking I/O,
+    // or OS scheduling; it cannot by itself distinguish these causes.
+    const currentCpu = process.cpuUsage()
+    const cpuUserMs = Math.max(0, Math.round((currentCpu.user - previousCpu.user) / 1000))
+    const cpuSystemMs = Math.max(0, Math.round((currentCpu.system - previousCpu.system) / 1000))
+    previousCpu = currentCpu
     ticks += 1
     const delayMs = Math.max(0, Math.round(now - previous - HEARTBEAT_INTERVAL_MS))
     previous = now
 
     if (delayMs > HEARTBEAT_DELAY_THRESHOLD_MS || ticks % HEARTBEAT_PERIODIC_TICKS === 0) {
-      traceStartup('main-loop-heartbeat', { tick: ticks, delayMs })
+      traceStartup('main-loop-heartbeat', { tick: ticks, delayMs, cpuUserMs, cpuSystemMs })
     }
     if (now - started >= HEARTBEAT_MAX_MS || ticks >= HEARTBEAT_MAX_MS / HEARTBEAT_INTERVAL_MS) {
       clearInterval(timer)
