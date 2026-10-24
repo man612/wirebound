@@ -1,0 +1,26 @@
+{
+  "name": "wirebound-tauri-spike",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "vite --host 127.0.0.1 --port 1420",
+    "build:web": "vite build",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@tailwindcss/vite": "^4.2.4",
+    "@vitejs/plugin-react": "^5.1.1",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.6"
+  }
+}
