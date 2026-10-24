@@ -18,7 +18,12 @@ fn runtime_probe() -> RuntimeProbe {
 }
 
 #[tauri::command]
-fn window_action(window: tauri::Window, action: String) -> Result<(), String> {
+fn show_after_renderer_ready(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.show().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn window_action(window: tauri::WebviewWindow, action: String) -> Result<(), String> {
     let result = match action.as_str() {
         "minimize" => window.minimize(),
         "maximize" => {
@@ -36,7 +41,7 @@ fn window_action(window: tauri::Window, action: String) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![runtime_probe, window_action])
+        .invoke_handler(tauri::generate_handler![runtime_probe, window_action, show_after_renderer_ready])
         .run(tauri::generate_context!())
         .expect("Tauri spike runtime error");
 }
