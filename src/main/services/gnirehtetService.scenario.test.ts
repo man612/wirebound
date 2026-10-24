@@ -237,8 +237,9 @@ describe('GnirehtetService lifecycle scenarios', () => {
     await service.start('8.8.8.8', '31416')
     const result = await service.startDevice('SYNTHETIC-C3', '8.8.8.8', '31416')
     expect(result.success).toBe(false)
-    // Returned ActionResult still contains the raw upstream error, but UI service
-    // logs must redact it. Cross-IPC error exposure needs independent review.
+    // Both the returned IPC result and the emitted service log must be safe.
+    expect(result.error).not.toContain('SYNTHETIC-C3')
+    expect(result.error).toContain('SY...C3')
     expect(logs.join('\n')).not.toContain('SYNTHETIC-C3')
     expect(logs.join('\n')).toContain('SY...C3')
   })
