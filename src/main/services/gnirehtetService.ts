@@ -127,7 +127,10 @@ export class GnirehtetService {
     } catch (error) {
       const message = readError(error, 'Failed to start tethering on the selected device.')
       this.emitSafeLog(message, 'stderr')
-      return { success: false, error: message }
+      return {
+        success: false,
+        error: redactGnirehtetLogLine(message, [...this.knownDeviceIds])
+      }
     }
   }
 
@@ -152,7 +155,10 @@ export class GnirehtetService {
     } catch (error) {
       const message = readError(error, 'Failed to stop tethering on the selected device.')
       this.emitSafeLog(message, 'stderr')
-      return { success: false, error: message }
+      return {
+        success: false,
+        error: redactGnirehtetLogLine(message, [...this.knownDeviceIds])
+      }
     }
   }
 
@@ -349,8 +355,9 @@ export class GnirehtetService {
   }
 
   private fail(error: string): ActionResult {
-    this.emitSafeLog(error, 'stderr')
+    const safeError = redactGnirehtetLogLine(error, [...this.knownDeviceIds])
+    this.emitSafeLog(safeError, 'stderr')
     this.setStatus('error')
-    return { success: false, error }
+    return { success: false, error: safeError }
   }
 }
