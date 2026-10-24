@@ -92,6 +92,28 @@ describe('opt-in Electron startup timeline', () => {
     expect(trace.skipAdbCacheForQa).toBe(true)
   })
 
+  it('does not defer ADB runtime in ordinary application launches', async () => {
+    vi.stubEnv('WIREBOUND_QA_DEFER_ADB_RUNTIME', '1')
+    vi.stubEnv('WIREBOUND_QA_PROFILE_ISOLATION', '1')
+    vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', undefined)
+    const { deferAdbRuntimeForQa } = await import('./startupTrace')
+    expect(deferAdbRuntimeForQa).toBe(false)
+  })
+
+  it('requires both isolated QA userData and absolute trace before deferred runtime mode', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wirebound-ui-first-qa-'))
+    tempDirs.push(dir)
+    vi.stubEnv('WIREBOUND_QA_DEFER_ADB_RUNTIME', '1')
+    vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', join(dir, 'startup.jsonl'))
+    vi.stubEnv('WIREBOUND_QA_PROFILE_ISOLATION', undefined)
+    let trace = await import('./startupTrace')
+    expect(trace.deferAdbRuntimeForQa).toBe(false)
+    vi.resetModules()
+    vi.stubEnv('WIREBOUND_QA_PROFILE_ISOLATION', '1')
+    trace = await import('./startupTrace')
+    expect(trace.deferAdbRuntimeForQa).toBe(true)
+  })
+
   it('never schedules a heartbeat for ordinary application launches', async () => {
     vi.stubEnv('WIREBOUND_QA_STARTUP_TRACE', undefined)
     const { startStartupHeartbeat } = await import('./startupTrace')
