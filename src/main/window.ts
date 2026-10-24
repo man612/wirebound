@@ -46,13 +46,17 @@ export function createMainWindow(paths: RuntimePaths): BrowserWindow {
       if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
       void mainWindow.webContents
         .executeJavaScript(
-          "({ rootChildren: document.getElementById('root')?.childElementCount ?? -1, readyState: document.readyState })"
+          "(() => { const paint = performance.getEntriesByType('paint'); const at = (name) => Math.round(paint.find((entry) => entry.name === name)?.startTime ?? -1); return { rootChildren: document.getElementById('root')?.childElementCount ?? -1, readyState: document.readyState, firstPaintMs: at('first-paint'), firstContentfulPaintMs: at('first-contentful-paint') }; })()"
         )
-        .then((result: { rootChildren: number; readyState: string }) => {
+        .then((result: { rootChildren: number; readyState: string; firstPaintMs: number; firstContentfulPaintMs: number }) => {
           traceStartup('renderer-root-probe', {
             rootChildren: result.rootChildren,
             readyState: result.readyState,
-            visible: mainWindow.isVisible()
+            visible: mainWindow.isVisible(),
+            // Navigation-relative Chromium paint timing; -1 = metric unavailable.
+            // Never includes DOM text, paths, device identifiers or URLs.
+            firstPaintMs: result.firstPaintMs,
+            firstContentfulPaintMs: result.firstContentfulPaintMs
           })
         })
         .catch(() => traceStartup('renderer-root-probe-failed'))
