@@ -39,3 +39,31 @@ Windows local QA checkout at D:\Projects\wirebound-ux-review-20261021. On this b
 Do not infer a production speedup from the earlier ADB-skip A/B (median 1133.5ms normal vs 485ms skip); that experiment bypassed cache work altogether and used an old packaged Electron runtime. This new variant retains cache integrity but moves its I/O after UI display, a materially different intervention.
 
 Safety constraints: Never merge/release without ASAR verification, a packaged Windows test with actual React content, a verified trace showing window-shown before deferred-runtime-start, positive and negative IPC tests (early/late operations, shutdown, corrupted cache, missing runtime), and ADB/Gnirehtet functional parity with a real Android device. The demo-only hand-built 15-file ASAR, if used for smoke QA due electron-builder HDD stalls, is **not** production-equivalent packaging.
+
+
+## Actual isolated Windows smoke — 2026-10-24
+
+A second hand-built **QA-only** Windows package was assembled from the known intact v1.2 unpacked Electron runtime and the latest UI-first compiled main/preload/renderer bundles. Its archive at F:\Wirebound-Lab\qa-packages\issue44-ui-first-manual-v2\win-unpacked\resources\app.asar passed **15/15 SHA-256 payload checks**, zero failures. The embedded code and QA flag were verified. It is NOT a normal electron-builder package or installer.
+
+Ran the isolated cold-start harness separately against this same QA executable, with separate QA profiles:
+
+| Stage | UI-first opt-in | Normal control |
+| --- | ---: | ---: |
+| Main module started | 3,358ms | 26ms |
+| Eager runtime cache start | — | 107ms |
+| Window created | 10,103ms | 259ms |
+| Renderer DOM ready | 17,505ms | 624ms |
+| Full-size window shown | **17,577ms** | **641ms** |
+| Deferred runtime scheduled | 17,577ms | — |
+| Deferred ADB fingerprint began | 17,637ms | — |
+| Deferred cache fully prepared | 18,479ms | — |
+| ADB server ready | 19,391ms | 964ms |
+| Populated React root verified | 19,962ms | 2,638ms |
+
+Both were **PASS**, leaving zero QA Wirebound processes. UI-first displayed the application window **59ms before deferred runtime work began** and completed ADB/server preparation afterward. Normal control still loaded ADB before the window, without deferred markers. The source-controlled QA trace checker accepted both traces with exit code zero.
+
+Evidence:
+- F:\Wirebound-Lab\benchmarks\issue44-ui-first-smoke-20261024\attempt-1\startup.jsonl
+- F:\Wirebound-Lab\benchmarks\issue44-ui-first-normal-control-20261024\attempt-1\startup.jsonl
+
+**Interpretation:** This verifies lifecycle ordering, NOT a speedup. The UI-first attempt had a 17.6s startup and the immediately following normal control 0.64s amid drastically different cache/OS/HDD conditions. These sequential trials are not a controlled performance comparison. The native-window, renderer and early module stages still showed severe long-tail variation independently of ADB preparation. A true first-paint metric remains to be implemented, and actual Android tethering and installed NSIS parity are untested. Mode remains QA-only, PR Draft and issue #44 Open.
