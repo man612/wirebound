@@ -18,3 +18,9 @@ Read [docs/CI_LOCAL_VALIDATION.md](docs/CI_LOCAL_VALIDATION.md) before interpret
 - Preserve real ADB/VPN status, true cumulative TUN RX/TX counts, translation, keyboard accessibility, Dark/Light behavior and reduced-motion preferences. Do not fake scanning or force scrolling to logs.
 - Document any before/after screenshots only after masking Android device serial/IDs. The maintainer has one physical phone; dual-phone hardware testing is waived.
 - Close/check off each item in #48 only after implementation, tests, and a linked merged PR. Keep GitHub release readiness (#38) separate from these UX requirements.
+
+## Issue #58 native Gnirehtet stdout/stderr privacy — 2026-10-25
+
+- Read [issue #58](https://github.com/man612/wirebound/issues/58) and [the log privacy audit/checkpoint](docs/qa/ISSUE58_GNIREHTET_LOG_PRIVACY_CHECKPOINT_2026-10-25.md) before editing `src/main/services/gnirehtetService.ts` or the new `gnirehtetLogPrivacy.ts`.
+- The isolated Draft proposal redacts known and structured Gnirehtet device serials from **reassembled** native process lines and selected returned errors; it is **not universal log/PII sanitization**. Pure JS helper checks passed 16/16 only; native Vitest, typecheck, actual Windows Gnirehtet and Android VPN checks are **NOT** complete.
+- **Same-file integration conflict:** Draft PR #55 also edits `gnirehtetService.ts` for lifecycle safety. Preserve its child-generation and cancellation safeguards plus this branch's per-child/per-stream line buffers and error sanitization; do not select one version of the file wholesale. Separate ADB warning changes are on Draft PR #57. No merge, release, global ADB changes or ordinary Windows profile edits.
