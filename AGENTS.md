@@ -18,3 +18,9 @@ Read [docs/CI_LOCAL_VALIDATION.md](docs/CI_LOCAL_VALIDATION.md) before interpret
 - Preserve real ADB/VPN status, true cumulative TUN RX/TX counts, translation, keyboard accessibility, Dark/Light behavior and reduced-motion preferences. Do not fake scanning or force scrolling to logs.
 - Document any before/after screenshots only after masking Android device serial/IDs. The maintainer has one physical phone; dual-phone hardware testing is waived.
 - Close/check off each item in #48 only after implementation, tests, and a linked merged PR. Keep GitHub release readiness (#38) separate from these UX requirements.
+
+## Issue #53: fail-closed Gnirehtet lifecycle fix — 2026-10-24
+
+- Before changing `src/main/services/gnirehtetService.ts`, consult [issue #53](https://github.com/man612/wirebound/issues/53), [the proposed fix checkpoint](docs/qa/ISSUE53_LIFECYCLE_FIX_CHECKPOINT_2026-10-24.md) and documentation-only audit [PR #54](https://github.com/man612/wirebound/pull/54). The issue-53 fix is on its **own Draft branch** and has only 5/5 isolated JS control-flow checks, **not native Vitest, typecheck, Windows, NSIS or Android validation**.
+- Preserve single-flight Start/Stop, cancellation after async ADB readiness, process-identity checks, and fail-closed behavior if child exit is not confirmed. Never use a global ADB kill or force-stop other apps' reverse mappings as a workaround.
+- Keep UX PR #50, startup PR #51 and Tauri PR #52 separate; the existing PR #50+#51 merge preservation contract still applies. No merges/releases, Windows installation or forced resets without explicit approval. The Windows host is expected offline until roughly 2026-10-27 09:00 WIB; do not repeatedly poll.
