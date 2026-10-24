@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import { traceStartup } from './startupTrace'
+import { skipAdbCacheForQa, traceStartup } from './startupTrace'
 import { fingerprintAdbRuntime, verifyAndPopulateAdbCache } from './adbCacheFingerprint'
 
 export interface RuntimePaths {
@@ -52,7 +52,8 @@ export function getRuntimePaths(): RuntimePaths {
     rootCandidates.map((candidate) => join(candidate, 'bin', 'platform-tools')),
     join(root, 'bin', 'platform-tools')
   )
-  const adbDir = prepareAdbCache(bundledAdbDir)
+  const adbDir = skipAdbCacheForQa ? bundledAdbDir : prepareAdbCache(bundledAdbDir)
+  if (skipAdbCacheForQa) traceStartup('adb-cache-skipped-qa')
   const trayIcon = firstExisting(
     rootCandidates.flatMap((candidate) => [
       join(candidate, 'icon.ico'),
