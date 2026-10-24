@@ -19,6 +19,13 @@ export const skipAdbCacheForQa =
   process.env.WIREBOUND_QA_PROFILE_ISOLATION === '1' &&
   process.env.WIREBOUND_QA_SKIP_ADB_CACHE === '1'
 
+// Explicit QA opt-in while the UI-first lifecycle is validated on real Windows.
+// Normal release startup is deliberately unchanged until installed-app QA passes.
+export const deferAdbRuntimeForQa =
+  startupTraceEnabled &&
+  process.env.WIREBOUND_QA_PROFILE_ISOLATION === '1' &&
+  process.env.WIREBOUND_QA_DEFER_ADB_RUNTIME === '1'
+
 type TraceDetail = Record<string, string | number | boolean | null>
 
 export function traceStartup(event: string, details: TraceDetail = {}): void {
