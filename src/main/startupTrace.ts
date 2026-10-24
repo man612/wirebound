@@ -11,6 +11,14 @@ export const startupTraceEnabled = Boolean(traceFile && isAbsolute(traceFile))
 export const skipWindowIconForQa =
   startupTraceEnabled && process.env.WIREBOUND_QA_SKIP_WINDOW_ICON === '1'
 
+// QA-only A/B: use the packaged ADB runtime directly, without preparing a
+// per-user cache. Both absolute trace and isolated userData are mandatory;
+// regular launches always keep the original cache verification behavior.
+export const skipAdbCacheForQa =
+  startupTraceEnabled &&
+  process.env.WIREBOUND_QA_PROFILE_ISOLATION === '1' &&
+  process.env.WIREBOUND_QA_SKIP_ADB_CACHE === '1'
+
 type TraceDetail = Record<string, string | number | boolean | null>
 
 export function traceStartup(event: string, details: TraceDetail = {}): void {
