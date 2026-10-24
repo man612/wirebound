@@ -62,3 +62,23 @@ The earlier **pending** status above has now been advanced using the existing co
 Windows evidence: `F:\\Wirebound-Lab\\logs\\issue44-react-milestones-manual-v5.log`, `issue44-react-milestones-v5-smoke.log`, `issue44-react-milestones-v5-verification.log`; updated chronicle `F:\\Wirebound-Lab\\STATUS-2026-10-24.md`.
 
 **Interpretation:** The instrumentation is confirmed to work in a real isolated Chromium/React launch; **a single 2.819s successful start does not explain or eliminate intermittent 15–57s stalls**. Root cause remains unproven and may vary among pre-window scheduling, native BrowserWindow work and HTML/JS/React loading. Keep #44 open / #51 Draft. Official NSIS parity and real Android USB/ADB/Gnirehtet traffic remain untested for v5; no release, dependency change or production ADB/profile mutation was made.
+
+## 13-start same-binary repeat / phase-delta analyzer — later 2026-10-24
+
+Following the manually packaged v5 smoke documented above, **twelve additional normal-icon cold-start QA attempts** used the **same verified QA executable**, each with separate `APPDATA`, `LOCALAPPDATA`, and Electron `userData`. No installer, DevTools remote debugging or Defender/resource sampler was enabled. The 4-run series and 8-run series both completed with harness **exit 0 / zero failures**; combined with the first smoke this yields **13/13 visible window + populated React root**. An explicit subsequent Windows process check found **zero remaining processes using the exact QA v5 executable**.
+
+Across all thirteen attempts: visible window **median 1,145ms**, **min 668ms**, **max 2,819ms**, from each trace's process-relative clock. Every trace has all three ordered Chromium/React/UI marks, FCP, and a populated root; **0 malformed JSONL lines**. **No 15–57s tail was reproduced** in these warmed sequential runs. These are observational local measurements, not installed NSIS parity or a claim of reliability in every environment. Low contention and a warmed OS file cache may have contributed.
+
+For the *four-run* series, each ESM-entry→React-commit delta was **11–15ms**, whereas Chromium responseEnd→domInteractive varied **306–985ms** across those runs. This makes initial React reconciliation an unlikely dominant contributor for **these successful attempts**, not proof that React can never stall. A 13-run comprehensive CSV additionally records main-module/app-ready, bundled ADB fingerprint, native window construction and renderer-load→DOM durations in *separate process-clock fields*.
+
+New small, source-controlled, Node-only QA tool:
+
+- `scripts/qa/startup-mark-deltas.cjs` reads local attempt folders, selects the latest *available* renderer mark (ignoring early FCP `-1` when a later valid sample exists), and emits numeric-only CSV with explicit missing values. It **does not** mix process-relative and Chromium-navigation-relative clocks, and it does not read device IDs, UI text, settings, URLs, traffic or filesystem path contents.
+- `scripts/qa/startup-mark-deltas.test.cjs` covers process/navigation phase separation, late FCP, missing/corrupt records, bad mark ordering and attempt-directory numeric sorting. **5/5 Node tests passed** on Windows; parser exit **0** on all real traces.
+- Run: `node scripts/qa/startup-mark-deltas.cjs <QA-output-directory> [additional-output-directories...]`. Do not treat a fast observed run as proof of resolved #44.
+
+Raw Windows results: `F:\\Wirebound-Lab\\benchmarks\\issue44-react-milestones-v5-repeats-20261024` (4 runs), `...\\issue44-react-milestones-v5-8more-20261024` (8 runs), and merged `F:\\Wirebound-Lab\\benchmarks\\issue44-react-milestones-v5-13run-deltas.csv`. Logs: `F:\\Wirebound-Lab\\logs\\issue44-react-milestones-v5-repeats.log`, `issue44-react-milestones-v5-8more.log`, `issue44-startup-mark-deltas-tests.log`.
+
+**Known QA false-positive risk still open:** `Get-WireboundStartupReadiness` currently considers a visible window + **nonempty React root** sufficient. The App's pre-settings placeholder also produces a nonempty root. The new marks permit a stronger *post-hoc* verification, but the original harness has **not** yet been changed to require `ui-settings-ready` (and a valid mark does not prove settings IPC succeeded or FCP occurred). A future harness fix should preserve compatibility with older traces and provide later probes if renderer/settings initialization exceeds the current two-second probe. Do not claim this false-positive risk has been fixed by the new CSV tool.
+
+Keep PR #51 **Draft** and issue #44 **Open**. Native installer/USB parity remains outstanding; the root cause of the intermittent Windows startup tail is not established. No production behavior changed by the two new QA analyzer files.
