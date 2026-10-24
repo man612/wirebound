@@ -33,6 +33,8 @@ const servicesGate = new StartupServiceGate<ReturnType<typeof ensureServices>>()
 // Electron does not necessarily honor changed APPDATA in a spawned process;
 // override userData/sessionData before 'ready' only for explicit QA isolation.
 const qaProfileDir = getQaProfileDir()
+// Only the accepted isolated QA userData enables the opt-in UI-first path.
+const uiFirstQa = deferAdbRuntimeForQa && Boolean(qaProfileDir)
 if (qaProfileDir) {
   mkdirSync(qaProfileDir, { recursive: true })
   app.setPath('userData', qaProfileDir)
@@ -210,10 +212,10 @@ async function bootstrap(): Promise<void> {
   // In the isolated QA experiment, discover icon/resource locations without
   // hashing ADB files on the critical path to the first visible window.
   // Normal installed launches still prepare ADB synchronously as before.
-  const paths = deferAdbRuntimeForQa
+  const paths = uiFirstQa
     ? getRuntimePaths({ deferAdbPreparation: true })
     : ensureServices().paths
-  if (!deferAdbRuntimeForQa) servicesGate.start(ensureServices)
+  if (!uiFirstQa) servicesGate.start(ensureServices)
   traceStartup('settings-load-start')
   const settings = loadSettings()
   traceStartup('settings-load-ready')
@@ -223,7 +225,7 @@ async function bootstrap(): Promise<void> {
   mainWindow = createMainWindow(paths)
   traceStartup('bootstrap-window-created')
 
-  if (deferAdbRuntimeForQa) {
+  if (uiFirstQa) {
     const window = mainWindow
     window.once('show', () => {
       traceStartup('deferred-runtime-scheduled')
