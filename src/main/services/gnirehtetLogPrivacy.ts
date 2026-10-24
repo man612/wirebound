@@ -34,8 +34,8 @@ export function redactGnirehtetLogLine(
   )
   // CLI diagnostics: adb -s SERIAL shell ...
   text = text.replace(
-    /(\b-s\s+)([A-Za-z0-9._:-]{5,255})(?=\s|$)/g,
-    (_, prefix: string, id: string) => prefix + maskId(id)
+    /(^|[\s[(])(-s\s+)([A-Za-z0-9._:-]{5,255})(?=\s|$)/g,
+    (_, leading: string, prefix: string, id: string) => leading + prefix + maskId(id)
   )
   // ADB transport errors: adb: device 'SERIAL' not found / offline / unauthorized.
   text = text.replace(
