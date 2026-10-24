@@ -38,6 +38,8 @@ New tests are checked in:
 
 A source-method V8 exercise of the exact new helper's GitHub content, after stripping TypeScript annotations in-memory, initially revealed a mistake in the `adb -s` regex's word boundary. This was corrected in a subsequent commit. **The final 16/16 focused JS helper assertions passed** on the updated source blob. This does **NOT** constitute TypeScript typecheck, native Node/Vitest, renderer/Chromium, packaged Windows or Android validation.
 
+**Second isolated service-boundary reproduction (corrected harness):** the updated `GnirehtetService` method bodies `rememberDeviceId`, `emitSafeLog`, `attachProcessEvents`, `handleOutput`, and `startDevice` were extracted from the fresh GitHub file and run with synthetic event emitters and mocked ADB. **9/9 targeted assertions passed**: no emission of partial data chunks, masked Rust stderr, no raw synthetic ID, stdout retained, trailing stderr buffered then masked at child close, and masked per-device action error in both logs and returned result. A preliminary harness invoked `startDevice` after the fake child closed, which correctly triggered the unrelated 'engine must be started' guard and failed two assertions; the harness ordering was corrected and **9/9 passed** without any production-code change. As before, this is NOT native TypeScript/Vitest/Windows validation.
+
 **Not run:** exact branch `npm run typecheck`, focused/full `npm test`, lint, build, Windows installed Electron startup, real native Gnirehtet process output, or genuine Android VPN traffic. Windows host offline; do not infer tests passed from another branch or from the current GitHub Actions quota. Do not misrepresent these checks.
 
 ## Special integration warning: conflict with PR #55
