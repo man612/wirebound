@@ -1,0 +1,17 @@
+@import "../../../src/renderer/src/index.css";
+@source "../../../src/renderer/src";
+
+.tauri-lab-watermark {
+  position: fixed;
+  z-index: 99999;
+  bottom: 8px;
+  right: 10px;
+  padding: 5px 8px;
+  border: 1px solid #d97706;
+  border-radius: 5px;
+  background: #111827;
+  color: #fcd34d;
+  font: 600 10px/1.4 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
