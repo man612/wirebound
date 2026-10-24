@@ -15,7 +15,9 @@ const fields = [
   'reactFirstCommitNavMs', 'uiSettingsReadyNavMs',
   'firstPaintNavMs', 'fcpNavMs', 'responseToDomInteractiveMs',
   'domInteractiveToEntryMs', 'entryToReactCommitMs', 'reactCommitToUiReadyMs',
-  'uiReadyToFcpMs', 'marksMonotonic'
+  'uiReadyToFcpMs', 'marksMonotonic',
+  'heartbeatSamples', 'maxHeartbeatDelayMs', 'cpuUserMsAtMaxLag',
+  'cpuSystemMsAtMaxLag', 'cpuSampledHeartbeats'
 ]
 
 function measure(a, b) {
@@ -45,6 +47,14 @@ function summarizeTrace(input, series, attempt) {
     return null
   }
   const root = [...probes].reverse().find(e => Number.isInteger(e.rootChildren) && e.rootChildren >= 0)
+  const heartbeats = events.filter(e => e.event === 'main-loop-heartbeat')
+  const measuredDelays = heartbeats.filter(e => good(e.delayMs) !== null)
+  const slowestHeartbeat = measuredDelays.reduce((slowest, next) => (
+    !slowest || next.delayMs > slowest.delayMs ? next : slowest
+  ), null)
+  const cpuSampledHeartbeats = heartbeats.filter(e =>
+    good(e.cpuUserMs) !== null && good(e.cpuSystemMs) !== null
+  ).length
   const [response, dom, entry, commit, ui, paint, fcp] = [
     'responseEndMs', 'domInteractiveMs', 'entryEvaluatedMs',
     'reactFirstCommitMs', 'uiSettingsReadyMs', 'firstPaintMs',
@@ -70,7 +80,14 @@ function summarizeTrace(input, series, attempt) {
     entryToReactCommitMs: measure(entry, commit),
     reactCommitToUiReadyMs: measure(commit, ui),
     uiReadyToFcpMs: measure(ui, fcp),
-    marksMonotonic: [entry, commit, ui].every(x => x !== null) ? entry <= commit && commit <= ui : null
+    marksMonotonic: [entry, commit, ui].every(x => x !== null) ? entry <= commit && commit <= ui : null,
+    heartbeatSamples: heartbeats.length,
+    maxHeartbeatDelayMs: good(slowestHeartbeat?.delayMs),
+    // CPU values belong to the *same heartbeat interval* as its worst lag.
+    // They measure the Electron main process only (not Chromium child CPU).
+    cpuUserMsAtMaxLag: good(slowestHeartbeat?.cpuUserMs),
+    cpuSystemMsAtMaxLag: good(slowestHeartbeat?.cpuSystemMs),
+    cpuSampledHeartbeats
   }
 }
 
