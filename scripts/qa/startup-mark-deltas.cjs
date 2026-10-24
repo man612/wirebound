@@ -37,7 +37,14 @@ function summarizeTrace(input, series, attempt) {
   }
   const first = (name) => events.find(e => e.event === name)
   const at = (name) => good(first(name)?.elapsedMs)
-  const probes = events.filter(e => e.event === 'renderer-timing-early' || e.event === 'renderer-root-probe')
+  // A later renderer navigation has its own performance.timeOrigin and marks.
+  // Never join old-page FCP/UI-ready with new-page ESM/React measurements.
+  // Legacy test traces without did-start-loading retain their existing behavior.
+  const lastLoadIndex = events.findLastIndex(e => e.event === 'did-start-loading')
+  const currentNavigation = lastLoadIndex < 0 ? events : events.slice(lastLoadIndex + 1)
+  const probes = currentNavigation.filter(e =>
+    e.event === 'renderer-timing-early' || e.event === 'renderer-root-probe'
+  )
   // Prefer a later valid observation rather than treating early -1 as final absence.
   const probeNumber = (name) => {
     for (let i = probes.length - 1; i >= 0; i--) {
@@ -68,7 +75,13 @@ function summarizeTrace(input, series, attempt) {
     beforeAppReadyMs: measure(at('main-module-start'), at('app-when-ready')),
     adbFingerprintMs: measure(at('adb-cache-fingerprint-start'), at('adb-cache-fingerprint-ready')),
     nativeWindowCtorMs: measure(at('window-creating'), at('window-created')),
-    rendererLoadToDomMs: measure(at('did-start-loading'), at('dom-ready')),
+    // Match the latest load start with DOM readiness from that SAME navigation.
+    // A second load without dom-ready must remain unavailable, not borrow an
+    // earlier success or report a duration spanning two different loads.
+    rendererLoadToDomMs: lastLoadIndex < 0 ? null : measure(
+      good(events[lastLoadIndex].elapsedMs),
+      good(currentNavigation.find(e => e.event === 'dom-ready')?.elapsedMs)
+    ),
     rootProbeProcessMs: good(root?.elapsedMs),
     rootChildren: Number.isInteger(root?.rootChildren) ? root.rootChildren : null,
     rootVisible: typeof root?.visible === 'boolean' ? root.visible : null,
