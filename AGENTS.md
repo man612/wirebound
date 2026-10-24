@@ -18,3 +18,9 @@ Read [docs/CI_LOCAL_VALIDATION.md](docs/CI_LOCAL_VALIDATION.md) before interpret
 - Preserve real ADB/VPN status, true cumulative TUN RX/TX counts, translation, keyboard accessibility, Dark/Light behavior and reduced-motion preferences. Do not fake scanning or force scrolling to logs.
 - Document any before/after screenshots only after masking Android device serial/IDs. The maintainer has one physical phone; dual-phone hardware testing is waived.
 - Close/check off each item in #48 only after implementation, tests, and a linked merged PR. Keep GitHub release readiness (#38) separate from these UX requirements.
+
+## Issue #56 ADB log privacy / cleanup-count audit — 2026-10-24
+
+- Read [issue #56](https://github.com/man612/wirebound/issues/56) and [the exact offline fix/QA handoff](docs/qa/ISSUE56_ADB_PRIVACY_CLEANUP_CHECKPOINT_2026-10-24.md) before touching ADB warning logs, `stopAllClients()` or Android client cleanup semantics.
+- Proposed isolated branch masks the current Android device ID in selected `console.warn` calls and counts successful `am force-stop` **commands**, not previously active clients. This is **not** proof a physical VPN ended or all native process/renderer logs are redacted. The two native Vitest fixtures are written but unrun; only 7/7 source-method JavaScript assertions passed without hardware.
+- Do not alter shared/global ADB or another app's reverse mapping; preserve `localabstract:gnirehtet`-only cleanup. The Gnirehtet lifecycle fix is separately proposed in Draft PR #55; this branch must not silently merge it or modify user Windows installations. Current Windows availability is not confirmed before roughly Tue 2026-10-27 09:00 WIB.
