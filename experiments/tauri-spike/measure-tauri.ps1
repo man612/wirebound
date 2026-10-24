@@ -13,9 +13,39 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type @'
 using System;
+using System.Text;
 using System.Runtime.InteropServices;
 public static class TauriLabNative {
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    public delegate bool EnumProc(IntPtr hwnd, IntPtr data);
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc callback, IntPtr data);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+    public static extern int GetClassName(IntPtr hwnd, StringBuilder buffer, int length);
+    public static IntPtr FindVisibleMainWindow(uint processId) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((hwnd, data) => {
+            uint owner;
+            GetWindowThreadProcessId(hwnd, out owner);
+            if (owner != processId || !IsWindowVisible(hwnd)) return true;
+            RECT rect;
+            if (!GetWindowRect(hwnd, out rect)) return true;
+            int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
+            var cls = new StringBuilder(128);
+            GetClassName(hwnd, cls, cls.Capacity);
+            // Tauri/Tao also owns a visible 16x16 event-target helper.
+            // Do NOT count it as a dashboard window or use MainWindowHandle.
+            if (cls.ToString() == "Tauri Window" && width >= 760 && height >= 560) {
+                found = hwnd;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 }
 '@ -ErrorAction Stop
 
@@ -66,14 +96,14 @@ for ($run = 1; $run -le $Runs; $run++) {
       Start-Sleep -Milliseconds 40
       $process.Refresh()
       if ($process.HasExited) { throw 'Process exited before displaying a window.' }
-      $handle = $process.MainWindowHandle
-      if ($handle -ne [IntPtr]::Zero -and [TauriLabNative]::IsWindowVisible($handle)) {
+      $handle = [TauriLabNative]::FindVisibleMainWindow([uint32]$process.Id)
+      if ($handle -ne [IntPtr]::Zero) {
         $shownMs = [math]::Round($timer.Elapsed.TotalMilliseconds, 1)
         break
       }
     }
-    if ($null -eq $shownMs) { throw 'Timeout: no visible native window.' }
-    # Sample memory AFTER first-window timing to avoid polluting the timing.
+    if ($null -eq $shownMs) { throw 'Timeout: no verified visible 760x560+ Tauri Window. 16x16 helper windows do not count.' }
+    # Sample memory AFTER verified full-size Tauri window visibility.
     Start-Sleep -Milliseconds 750
     $family = @(Get-ProcessFamily -ParentPid $process.Id)
     $procs = @($family | ForEach-Object {
@@ -120,4 +150,4 @@ if (-not (Test-Path -LiteralPath $parent)) {
 }
 $rows | Export-Csv -Path $OutputCsv -NoTypeInformation -Encoding UTF8
 Write-Host "Raw measurements: $OutputCsv"
-Write-Host 'Window-visible timing != React fully rendered. Child process coverage is best-effort.'
+Write-Host 'Verified visible Tauri Window size >=760x560; not a guaranteed completed paint. Helper windows excluded. Child process coverage best-effort.'
