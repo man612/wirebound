@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, readFileSync } from 'node:fs'
+import { copyFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const ADB_RUNTIME_FILES = ['adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'] as const
@@ -57,5 +58,45 @@ export function verifyAndPopulateAdbCache(
     }
   }
 
+  return filesCopied
+}
+
+
+/** Async I/O means slow HDD reads no longer hold Electron's main event loop. */
+export async function fingerprintAdbRuntimeAsync(
+  directory: string
+): Promise<AdbRuntimeFingerprint> {
+  const combined = createHash('sha256')
+  const sourceHashes = {} as AdbSourceHashes
+  for (const filename of ADB_RUNTIME_FILES) {
+    const source = join(directory, filename)
+    const contents = await readFile(source)
+    combined.update(filename)
+    combined.update(contents)
+    sourceHashes[filename] = createHash('sha256').update(contents).digest('hex')
+  }
+  return { fingerprint: combined.digest('hex').slice(0, 16), sourceHashes }
+}
+
+/** Still hash every existing cached destination; repair altered copies. */
+export async function verifyAndPopulateAdbCacheAsync(
+  sourceDir: string,
+  destinationDir: string,
+  sourceHashes: AdbSourceHashes
+): Promise<number> {
+  let filesCopied = 0
+  for (const filename of ADB_RUNTIME_FILES) {
+    const destination = join(destinationDir, filename)
+    let cachedHash: string | null = null
+    try {
+      cachedHash = createHash('sha256').update(await readFile(destination)).digest('hex')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    if (cachedHash !== sourceHashes[filename]) {
+      await copyFile(join(sourceDir, filename), destination)
+      filesCopied += 1
+    }
+  }
   return filesCopied
 }
