@@ -266,10 +266,12 @@ describe('GnirehtetService lifecycle scenarios', () => {
 
     await service.start('8.8.8.8', '31416')
     oldChild.emit('close', 7)
-    await service.start('8.8.8.8', '31416')
+    const replacement = service.start('8.8.8.8', '31416')
+    // Do not start a replacement relay while old-client cleanup is unresolved.
+    await Promise.resolve()
+    expect(spawnProcess).toHaveBeenCalledTimes(1)
     releaseCleanup(0)
-    await Promise.resolve()
-    await Promise.resolve()
+    await expect(replacement).resolves.toEqual({ success: true })
 
     expect(spawnProcess).toHaveBeenCalledTimes(2)
     expect(service.getStatus()).toBe('connecting')
