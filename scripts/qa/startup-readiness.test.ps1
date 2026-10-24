@@ -60,3 +60,55 @@ foreach ($case in $cases) {
   Write-Output ("PASS: {0}" -f $case.name)
 }
 Write-Output ("READINESS_CASES={0} FAILURES=0" -f $cases.Count)
+
+# New renderer instrumentation includes a numeric UI-ready mark. A mounted
+# placeholder alone must no longer pass when that field is present.
+function MarkEvent([string] $name, [int] $children, [double] $uiReadyMs) {
+  $entry = Event $name $children
+  $entry | Add-Member -NotePropertyName uiSettingsReadyMs -NotePropertyValue $uiReadyMs
+  return $entry
+}
+
+$modernCases = @(
+  [pscustomobject]@{
+    name = 'New trace: visible placeholder with UI mark unavailable is NOT ready'
+    events = @((Event 'window-shown'), (MarkEvent 'renderer-root-probe' 1 -1))
+    expected = $false
+  },
+  [pscustomobject]@{
+    name = 'New trace: mounted UI mark before window show succeeds'
+    events = @((MarkEvent 'renderer-timing-early' 1 156), (Event 'window-shown'))
+    expected = $true
+  },
+  [pscustomobject]@{
+    name = 'New trace: later full probe can confirm UI after early placeholder'
+    events = @((Event 'window-shown'), (MarkEvent 'renderer-timing-early' 1 -1), (MarkEvent 'renderer-root-probe' 1 1300))
+    expected = $true
+  },
+  [pscustomobject]@{
+    name = 'New trace: positive UI mark without actual React root is NOT ready'
+    events = @((Event 'window-shown'), (MarkEvent 'renderer-root-probe' 0 350))
+    expected = $false
+  },
+  [pscustomobject]@{
+    name = 'New trace: fatal renderer failure before UI readiness is NOT success'
+    events = @((Event 'window-shown'), (MarkEvent 'renderer-timing-early' 1 -1), (Event 'render-process-gone'), (MarkEvent 'renderer-root-probe' 1 1400))
+    expected = $false
+  },
+  [pscustomobject]@{
+    name = 'New trace: QA-initiated kill after UI success cannot undo pass'
+    events = @((Event 'window-shown'), (MarkEvent 'renderer-timing-early' 1 210), (Event 'render-process-gone'))
+    expected = $true
+  }
+)
+foreach ($case in $modernCases) {
+  $actual = Get-WireboundStartupReadiness -Events $case.events
+  if ($actual.ready -ne $case.expected) {
+    throw ("FAIL: {0}; expected={1}; actual={2}" -f $case.name, $case.expected, $actual.ready)
+  }
+  if (-not $actual.uiMarkObserved) {
+    throw ("FAIL: {0}; new instrumentation field not recognized" -f $case.name)
+  }
+  Write-Output ("PASS: {0}" -f $case.name)
+}
+Write-Output ("READINESS_MODERN_CASES={0} FAILURES=0" -f $modernCases.Count)
