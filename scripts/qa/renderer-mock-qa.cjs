@@ -38,8 +38,13 @@ async function init(page, initialSettings) {
       mock.scans++;
       await new Promise(r=>setTimeout(r,450));
       if(mock.failNextScan){mock.failNextScan=false;throw Error('Synthetic diagnostic error')}
+      const checkResults=mock.failNextCheckResult
+        ? c.map(check=>check.id==='adbRuntime'
+          ? {...check,status:'error',detail:'Synthetic ADB runtime failure'} : check)
+        : c;
+      mock.failNextCheckResult=false;
       return {generatedAt:new Date().toISOString(),engineStatus:'disconnected',
-        appVersion:'1.2.0',checks:c,devices:[{id:'FA...ED',name:d.name,status:'device',
+        appVersion:'1.2.0',checks:checkResults,devices:[{id:'FA...ED',name:d.name,status:'device',
         androidVersion:'15',apiLevel:'35',gnirehtetInstalled:true,gnirehtetActive:false}]}
     },
     copySupportReport:async(text)=>{mock.lastCopied=text;if(mock.failNextCopy){mock.failNextCopy=false;return {success:false,error:'Synthetic denied clipboard'}}return {success:true}},
@@ -235,6 +240,24 @@ async function main(){
    if(initial!=='dark'||light!=='light'||dark!=='dark')throw Error(JSON.stringify({initial,light,dark}));
    await onboard.screenshot({path:path.join(OUT,'onboarding-mock-800.png')});
    return {initial,light,dark};
+  });
+  await test('Completed scan with a failed ADB check stays expanded and announces issues',async()=>{
+    await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Dasbor')?.click());
+    await delay(180);
+    await page.evaluate(()=>{
+      window.__qa.failNextCheckResult=true;
+      [...document.querySelectorAll('button')].find(b=>b.textContent.includes('Jalankan Lagi'))?.click();
+    });
+    await delay(3300);
+    const result=await page.evaluate(()=>({
+      hidden:document.querySelector('#wirebound-diagnostic-details').hidden,
+      message:document.body.innerText.includes('Beberapa pemeriksaan perlu ditangani'),
+      failedCheck:document.body.innerText.includes('Synthetic ADB runtime failure'),
+      completed:document.body.innerText.includes('5/6 siap')
+    }));
+    if(result.hidden||!result.message||!result.failedCheck||!result.completed)
+      throw Error('Completed failed-check scan was hidden or mislabeled: '+JSON.stringify(result));
+    return result;
   });
   await test('Diagnostic failure discards previous success and remains expanded',async()=>{
    await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Dasbor')?.click());
