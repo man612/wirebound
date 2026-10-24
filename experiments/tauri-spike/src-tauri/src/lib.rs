@@ -18,8 +18,9 @@ fn runtime_probe() -> RuntimeProbe {
 }
 
 #[tauri::command]
-fn show_after_renderer_ready(window: tauri::WebviewWindow) -> Result<(), String> {
-    window.show().map_err(|error| error.to_string())
+fn show_after_renderer_ready(window: tauri::WebviewWindow) -> Result<bool, String> {
+    window.show().map_err(|error| error.to_string())?;
+    window.is_visible().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
