@@ -6,6 +6,7 @@ import Dashboard from './components/views/Dashboard'
 // Settings is not on the initial dashboard/onboarding path. Load on navigation.
 const Settings = lazy(() => import('./components/views/Settings'))
 import { useAppVersion, useDevices, useDiagnostics, useGnirehtet, useSettings } from './hooks'
+import { markRendererStartup } from './startupMarks'
 import type { Language } from './i18n'
 import { translations } from './i18n'
 
@@ -46,6 +47,11 @@ function App(): React.JSX.Element {
   }
 
   useEffect(() => {
+    markRendererStartup('react-first-commit')
+  }, [])
+
+  useEffect(() => {
+    if (loaded) markRendererStartup('ui-settings-ready')
     if (loaded && settings?.theme) {
       const theme = settings.theme
       document.documentElement.setAttribute('data-theme', theme)
