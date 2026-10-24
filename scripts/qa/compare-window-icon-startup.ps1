@@ -119,6 +119,7 @@ for ($round = 1; $round -le $Rounds; $round++) {
     }
     Write-Output ('TRIAL={0} MODE={1} PASS={2} WINDOW_MS={3} ICON_MS={4} CONSTRUCTOR_MS={5} HEARTBEAT_MAX_MS={6}' -f $index, $mode, $pass, $shown, $row.iconLoadMs, $row.windowCreateMs, $maxDelay)
   }
+}
 } finally {
   [Environment]::SetEnvironmentVariable('WIREBOUND_QA_DEFER_ADB_RUNTIME', $savedDeferred, 'Process')
 }
