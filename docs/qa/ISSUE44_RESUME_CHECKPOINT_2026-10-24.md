@@ -81,3 +81,15 @@ The local traces are **not checked into this public repository**. Do not fabrica
 - Leave #50 UX audit and #52 Tauri spike outside #51 unless a precisely scoped technical dependency is proven.
 
 **Next human checkpoint:** planned Windows availability Tuesday 2026-10-27 around 09:00 WIB, subject to user confirmation. This file itself is not an automation or a guarantee of a computer becoming available.
+
+## Offline QA analyzer audit — 2026-10-24 later continuation
+
+A GitHub-only source audit found a concrete **reporting correctness issue**, not a new Electron runtime or USB defect. The Node CSV phase analyzer previously scanned all `renderer-root-probe` and `renderer-timing-early` records and independently selected the last available numeric value for each performance mark. With **two renderer navigations in one trace**, the latest page could have ESM/React marks but *no* UI-ready/FCP while the CSV borrowed older UI-ready/FCP from the prior page, misleadingly implying that the latest page rendered correctly. It also paired the **first** `did-start-loading` with the **first** `dom-ready`, which could conceal an unfinished later navigation.
+
+- Commit `83313ea` updates **only** `scripts/qa/startup-mark-deltas.cjs`: renderer timing probes are scoped to events after the latest `did-start-loading` when present; renderer load-to-DOM duration is matched to that same latest load, or left empty when no later DOM readiness was observed. Historical synthetic traces that have no load-start event continue to use the old probe behavior.
+- Commit `9a6d8f2` adds two native Node regression fixtures to `scripts/qa/startup-mark-deltas.nodecheck.cjs`: the second navigation must not inherit UI-ready/FCP from the first, and an unfinished second navigation must not inherit the first `dom-ready`.
+- **Offline logic verification:** the *actual, freshly fetched* JS analyzer and test source were executed in an isolated JavaScript harness with emulated `fs`, `path`, and `node:test` dependencies; all **9/9** test callbacks passed, including the two new cases. This is **not** a native Node `node --test` run, not Vitest, and not Windows/packaged QA validation. No browser process, benchmarking, device, installer or normal user profile was touched.
+- **Residual review boundary:** `scripts/qa/startup-phase-report.ps1` is a separate PowerShell summary and was **not changed**; its early/first-event timing policy can still give a different answer on multi-navigation traces. Verify and repair it with real PowerShell tests when appropriate. No claim that *all* QA reporters are multi-navigation safe.
+- No source under `src/` was modified. Draft PR #51 remains diagnostic only; issue #44 retains unknown root cause. New documentation-only or QA-only commits can make branch HEAD newer than the initial checkpoint SHA `800714c`.
+
+For any later AI agent: inspect current PR #51 HEAD, and verify native `node --test scripts/qa/startup-mark-deltas.nodecheck.cjs` and Windows QA before promoting this code review to platform validation.
