@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Menu, Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { getRuntimePaths } from './appPaths'
+import { finishRuntimePathsAfterWindow, getRuntimePaths } from './appPaths'
 import type { RuntimePaths } from './appPaths'
 import { registerIpcHandlers } from './ipc'
 import { createMainWindow } from './window'
@@ -12,7 +12,8 @@ import { applyDeviceTunnelStates } from './deviceState'
 import { getDevicePollInterval } from './polling'
 import { applyCrashUploadConsent, initializeCrashReporting } from './services/telemetryService'
 import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
-import { startStartupHeartbeat, traceStartup } from './startupTrace'
+import { deferAdbRuntimeForQa, startStartupHeartbeat, traceStartup } from './startupTrace'
+import { StartupServiceGate } from './startupServiceGate'
 import { getQaProfileDir } from './qaProfile'
 
 
@@ -26,6 +27,7 @@ let gnirehtetService: GnirehtetService | null = null
 let handlersRegistered = false
 let shutdownStarted = false
 let shutdownComplete = false
+const servicesGate = new StartupServiceGate<ReturnType<typeof ensureServices>>()
 
 // The QA harness must never write into the normal Electron userData path.
 // Electron does not necessarily honor changed APPDATA in a spawned process;
@@ -205,7 +207,13 @@ function ensureServices(): { paths: RuntimePaths; adb: AdbService; engine: Gnire
 
 async function bootstrap(): Promise<void> {
   traceStartup('bootstrap-start')
-  const { paths, adb, engine } = ensureServices()
+  // In the isolated QA experiment, discover icon/resource locations without
+  // hashing ADB files on the critical path to the first visible window.
+  // Normal installed launches still prepare ADB synchronously as before.
+  const paths = deferAdbRuntimeForQa
+    ? getRuntimePaths({ deferAdbPreparation: true })
+    : ensureServices().paths
+  if (!deferAdbRuntimeForQa) servicesGate.start(ensureServices)
   traceStartup('settings-load-start')
   const settings = loadSettings()
   traceStartup('settings-load-ready')
@@ -214,6 +222,33 @@ async function bootstrap(): Promise<void> {
 
   mainWindow = createMainWindow(paths)
   traceStartup('bootstrap-window-created')
+
+  if (deferAdbRuntimeForQa) {
+    const window = mainWindow
+    window.once('show', () => {
+      traceStartup('deferred-runtime-scheduled')
+      // React can show its first window before any large HDD hash/copy work.
+      // The async fs operations do not synchronously block the main event loop.
+      setTimeout(() => {
+        if (shutdownStarted || window.isDestroyed()) {
+          servicesGate.fail(new Error('Wirebound is shutting down.'))
+          return
+        }
+        servicesGate.start(async () => {
+          traceStartup('deferred-runtime-start')
+          const preparedPaths = await finishRuntimePathsAfterWindow(paths)
+          if (shutdownStarted) throw new Error('Wirebound is shutting down.')
+          runtimePaths = preparedPaths
+          adbService = new AdbService(preparedPaths)
+          gnirehtetService = new GnirehtetService(
+            preparedPaths, adbService, sendLog, sendStatus
+          )
+          traceStartup('deferred-runtime-ready')
+          return { paths: preparedPaths, adb: adbService, engine: gnirehtetService }
+        })
+      }, 0)
+    })
+  }
   mainWindow.on('close', (event) => {
     if (shutdownStarted) return
     event.preventDefault()
@@ -227,9 +262,11 @@ async function bootstrap(): Promise<void> {
 
   if (!handlersRegistered) {
     registerIpcHandlers({
-      adbService: adb,
-      gnirehtetService: engine,
-      getDeviceSnapshot: () => getDeviceSnapshot(adb, engine),
+      getServices: () => servicesGate.wait(),
+      getDeviceSnapshot: async () => {
+        const { adb, engine } = await servicesGate.wait()
+        return getDeviceSnapshot(adb, engine)
+      },
       getMainWindow: () => mainWindow,
       hideToTray: hideMainWindowToTray,
       onSettingsChanged: (settings) => {
@@ -241,6 +278,8 @@ async function bootstrap(): Promise<void> {
   }
   traceStartup('ipc-ready')
 
+  const { adb, engine } = await servicesGate.wait()
+  if (shutdownStarted) return
   try {
     await adb.ensureServerReady()
     traceStartup('adb-server-ready')
@@ -265,6 +304,7 @@ async function shutdown(): Promise<void> {
   }
 
   shutdownStarted = true
+  servicesGate.fail(new Error('Wirebound is shutting down.'))
   stopDevicePolling()
 
   try {
