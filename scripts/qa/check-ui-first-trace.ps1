@@ -12,7 +12,7 @@ function Read-Trace([string] $Path) {
     catch { throw 'Malformed startup JSONL event.' }
   })
   if (-not $events.Count) { throw 'Startup trace is empty.' }
-  return ,$events
+  return $events
 }
 
 function First-Event([object[]] $Events, [string] $Name) {
