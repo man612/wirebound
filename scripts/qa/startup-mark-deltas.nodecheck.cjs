@@ -93,3 +93,49 @@ test('legacy heartbeat without CPU readings retains the gap but not invented CPU
   assert.equal(summarizeTrace(line('window-shown', 900), 'qa', 'attempt-2').maxHeartbeatDelayMs, null)
   assert.equal(formatCSV([r]).includes('undefined'), false)
 })
+
+test('does not mix renderer milestones across separate navigations', () => {
+  const input = [
+    line('did-start-loading', 100),
+    line('dom-ready', 200),
+    line('renderer-root-probe', 250, {
+      rootChildren: 1, visible: true,
+      entryEvaluatedMs: 90, reactFirstCommitMs: 110,
+      uiSettingsReadyMs: 120, firstContentfulPaintMs: 130
+    }),
+    line('did-start-loading', 500),
+    line('dom-ready', 600),
+    line('renderer-root-probe', 650, {
+      rootChildren: 1, visible: true,
+      entryEvaluatedMs: 40, reactFirstCommitMs: 60,
+      uiSettingsReadyMs: -1, firstContentfulPaintMs: -1
+    })
+  ].join('\n')
+  const r = summarizeTrace(input, 'qa', 'attempt-1')
+  assert.equal(r.rendererLoadToDomMs, 100)
+  assert.equal(r.entryEvaluatedNavMs, 40)
+  assert.equal(r.reactFirstCommitNavMs, 60)
+  assert.equal(r.uiSettingsReadyNavMs, null)
+  assert.equal(r.fcpNavMs, null)
+  assert.equal(r.reactCommitToUiReadyMs, null)
+  assert.equal(r.marksMonotonic, null)
+  assert.ok(!formatCSV([r]).includes('NaN'))
+})
+
+test('unfinished new navigation cannot borrow previous dom-ready or UI marks', () => {
+  const input = [
+    line('did-start-loading', 100),
+    line('dom-ready', 200),
+    line('renderer-root-probe', 250, {
+      rootChildren: 1, entryEvaluatedMs: 90,
+      reactFirstCommitMs: 110, uiSettingsReadyMs: 120
+    }),
+    line('did-start-loading', 500)
+  ].join('\n')
+  const r = summarizeTrace(input, 'qa', 'attempt-1')
+  assert.equal(r.rendererLoadToDomMs, null)
+  assert.equal(r.rootChildren, null)
+  assert.equal(r.entryEvaluatedNavMs, null)
+  assert.equal(r.uiSettingsReadyNavMs, null)
+  assert.equal(r.shownProcessMs, null)
+})
