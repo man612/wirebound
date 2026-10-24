@@ -37,7 +37,9 @@ This does not update their versions or the production lockfile:
 
 This opens the Tauri demo with the existing Wirebound UI. For a packaged Windows build:
 
-    npm run build
+    npm run build -- --no-bundle
+
+This is the **official Tauri CLI production build without installer bundling**. Do **not** use bare `cargo build --release` to validate this experiment: a local attempt loaded `http://127.0.0.1:1420/` (the `devUrl`) instead of embedded `frontendDist`, so the dashboard never mounted. Use `npm run build` only when you intentionally also want an installer.
 
 The installer is configured as an independent NSIS bundle named "Wirebound Tauri Lab". It must NEVER overwrite the Wirebound Electron installation. No installer is published from this branch. Generated files are ignored by Git.
 
@@ -47,7 +49,7 @@ The package currently has no committed npm/Cargo lock files; generate and commit
 
 1. Build the **release** Tauri executable on Windows with the required toolchain.
 2. Ensure no instance of the lab app is running.
-3. Execute measure-tauri.ps1 against the built executable. Tauri's native window initially remains hidden and is shown only after the existing React dashboard is mounted; this is deliberately closer to Electron's ready-to-show than a blank native window. The script then records visible-window elapsed time, main-process memory and a best-effort descendant-process sum.
+3. Execute the **corrected** measure-tauri.ps1 against the CLI-built executable. It enumerates Win32 top-level windows and only counts a visible full-size `Tauri Window`. Do not use `Get-Process.MainWindowHandle`: it can select the always-visible 16×16 `Tao Thread Event Target` helper. Previously recorded 46–113ms timings (20/20) were **FALSE POSITIVES** and are retained only as rejected methodological evidence. Tauri's native window initially remains hidden and is shown only after the existing React dashboard is mounted; this is deliberately closer to Electron's ready-to-show than a blank native window. The script then records visible-window elapsed time, main-process memory and a best-effort descendant-process sum.
 4. Compare equivalent UI states: the lab forces onboardingCompleted=true, dark theme, English, no devices. Prepare an **isolated** Electron QA profile with the SAME state before comparing. Repeat for an idle Windows session, then while the same background applications are open.
 5. For Electron, **reuse the corrected issue #44 packaged-app QA harness with VERIFIED isolated userData**. Do not run ordinary installed Wirebound with its real profile for comparisons. Keep trace/no-trace configurations and the exact benchmark window consistent.
 6. Capture CPU / disk activity, storage type, Windows Defender activity, raw results and any timeouts. Include WebView2 helper processes in memory comparisons; a single Tauri process measurement is misleading.
@@ -64,7 +66,7 @@ The package currently has no committed npm/Cargo lock files; generate and commit
 
 The Rust show-after-render signal only proves React mounted a dashboard DOM node, **not** that its first pixels were fully painted or that Electron and Tauri window events are perfectly equivalent. Also collect visual frame-readiness evidence before drawing definitive conclusions.
 
-No benchmark numbers have been collected by creating these source files.
+The earlier raw `tauri-10runs-20261024.csv` and `tauri-cold-20261024/summary.csv` files were invalidated by a Win32-window audit: the real 1016×729 dashboard window stayed hidden, while the harness detected a 16×16 event-target helper. Never use those values as measured Tauri startup. Valid numbers require a CLI production build and the corrected harness. Any later verified run should be documented separately.
 
 ### References
 
