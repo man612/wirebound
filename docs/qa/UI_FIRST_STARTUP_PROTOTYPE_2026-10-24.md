@@ -78,3 +78,45 @@ The existing QA-only renderer-root probe now records navigation-relative Perform
 The Settings page was also switched to a React.lazy dynamic import with a localized loading placeholder; dashboard and initial onboarding remain eager to preserve their current startup UX. TypeScript/web build confirmed Vite emitted a **25,986-byte Settings JS chunk**, and the initial renderer JS bundle decreased from **665,290 bytes to 642,681 bytes** (22,609 bytes / approximately 3.4% smaller). This is a **bundle-byte reduction, not a measured 3.4% startup speedup**. Verify actual Settings navigation and error behavior in an isolated packaged UI before release.
 
 Windows checks after renderer failure changes: **75/75 Vitest tests passed across 13 test files**, Node and web typechecks passed, main/preload/renderer production build passed. The on-demand Settings change also passed the subsequent production source build. The official NSIS installer, device tethering parity and repeatable long-tail startup measurements remain outstanding.
+
+
+## 2026-10-24 afternoon: recovered QA v3 package, Chromium paint, Settings navigation
+
+The Windows HDD computer recovered after the prior interrupted manual-v3 ASAR assembly. A process audit at about 13:11 WIB found zero remaining QA packagers or Wirebound QA processes and one existing global ADB process (untouched). The previously uncertain v3 archive at F:\Wirebound-Lab\qa-packages\issue44-renderer-paint-manual-v3\win-unpacked\resources\app.asar was independently verified using scripts/qa/verify-packaged-asar.cjs: **16 payload files verified, zero skipped, zero SHA-256 failures**. The packed v1.2.0 app included the UI-first marker, deferred-renderer-failure guard and paint probe, plus a separate Settings-*.js chunk. Both Windows executable and native ADB/Gnirehtet resources were present. Manual QA-only packaging remains NOT equivalent to electron-builder/NSIS validation.
+
+Two isolated UI-first runs on the same verified v3 executable:
+
+| Milestone | Normal icon, extremely slow run | QA skip-icon control |
+| --- | ---: | ---: |
+| Main module started | 3,751ms | 126ms |
+| Decode window icon | 1,980ms | 0ms |
+| Native BrowserWindow creation | 8,732ms | 418ms |
+| Renderer did-start-loading → DOM ready | 14,307ms | 185ms |
+| Full-size window shown | **34,979ms** | **1,301ms** |
+| Deferred ADB started | 34,983ms | 1,315ms |
+| Deferred ADB cache ready | 36,110ms | 2,230ms |
+| React root | Not confirmed before QA deadline | 3,193ms, rootChildren=1, visible=true |
+| Chromium first paint (navigation-relative) | Not confirmed | **948ms** |
+| Chromium first contentful paint (navigation-relative) | Not confirmed | **948ms** |
+| Isolated harness status | **FAIL, timeout at 40 seconds** | **PASS** |
+
+The slow run later recorded cleanup-induced GPU/renderer exits; this does NOT establish a spontaneous crash. The 40-second harness finished without a verified React root/FCP, so it must NOT be counted as a successful startup. On the fast run ADB runtime preparation completed; adb-server-ready was not recorded before the harness cleanup, so only deferred runtime preparation was confirmed. First Paint/FCP offsets are relative to renderer navigation, not process start.
+
+**Causality limitation:** The difference cannot be attributed to omitting the icon alone. HDD/OS cache and scheduler conditions were uncontrolled and native window/renderer phases differed dramatically as well. Icon decoding, native BrowserWindow construction and renderer startup remain separate areas for future paired measurements.
+
+### Settings navigation smoke, QA-only loopback browser debugging
+
+A new isolated userData profile was seeded with the nonpersonal onboarding-complete test fixture. A short-lived CDP session bound to 127.0.0.1 opened the dashboard, clicked Settings, confirmed the form and checkbox controls rendered, then returned to Dashboard. The second smoke PASSED:
+
+SETTINGS_NAVIGATION_PASS sidebar=true form=true lazySettingsRendered=true dashboardReturn=true
+
+The first check had also rendered Settings but falsely rejected because the dynamic Settings JS request was not visible through performance.getEntriesByType('resource') on the file:// Electron app. That PerformanceResourceTiming value remains false and is not proof of broken lazy import: the chunk was independently verified inside the ASAR and its React controls worked. The corrected test verifies actual functionality and logs resource-timing observation separately. No settings values, device identifiers or page text were captured.
+
+Local evidence:
+- F:\Wirebound-Lab\benchmarks\issue44-renderer-paint-smoke-v3-20261024\attempt-1\startup.jsonl (slow; timeout)
+- F:\Wirebound-Lab\benchmarks\issue44-renderer-paint-noicon-control-20261024\attempt-1\startup.jsonl (paint metrics; passed)
+- F:\Wirebound-Lab\logs\issue44-settings-cdp-smoke.log (initial assertion too strict)
+- F:\Wirebound-Lab\logs\issue44-settings-cdp-smoke-v2.log (actual navigation passed)
+- F:\Wirebound-Lab\qa-settings-cdp-smoke.mjs and F:\Wirebound-Lab\run-qa-settings-cdp-smoke.ps1 (local-only test tools; exact QA process cleanup)
+
+No source functionality was changed in this checkpoint. Official NSIS packaging, USB/ADB/Gnirehtet device parity, more extensive failure/shutdown tests and repeated comparable slow-start analysis remain outstanding. PR #51 stays Draft and issue #44 Open.
