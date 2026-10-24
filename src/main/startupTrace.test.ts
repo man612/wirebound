@@ -39,6 +39,20 @@ describe('opt-in Electron startup timeline', () => {
     const event = JSON.parse(readFileSync(file, 'utf8').trim()) as Record<string, unknown>
     expect(event).toMatchObject({ event: 'window-shown', visible: true, pid: process.pid })
     expect(event).toHaveProperty('elapsedMs')
+    expect(event).toMatchObject({
+      tracePreviousWriteMs: 0,
+      traceTotalWriteMs: 0,
+      traceMaxWriteMs: 0
+    })
+    traceStartup('window-ready')
+    const events = readFileSync(file, 'utf8').trim().split('\n').map(
+      (line) => JSON.parse(line) as Record<string, unknown>
+    )
+    expect(events).toHaveLength(2)
+    expect(events[1].tracePreviousWriteMs).toEqual(expect.any(Number))
+    expect(events[1].traceTotalWriteMs).toEqual(expect.any(Number))
+    expect(events[1].traceMaxWriteMs).toEqual(expect.any(Number))
+    expect(Number(events[1].traceTotalWriteMs)).toBeGreaterThanOrEqual(0)
     expect(event).not.toHaveProperty('url')
     expect(event).not.toHaveProperty('deviceId')
   })
