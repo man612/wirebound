@@ -67,3 +67,29 @@ test('reads only numbered attempt folders in numeric order', (t) => {
   assert.deepEqual(rows.map(r => r.attempt), ['attempt-2', 'attempt-10'])
   assert.deepEqual(rows.map(r => r.shownProcessMs), [2, 10])
 })
+
+test('associates CPU readings only with the actual worst delayed heartbeat', () => {
+  const input = [
+    line('main-loop-heartbeat', 1500, { tick: 1, delayMs: 500, cpuUserMs: 55, cpuSystemMs: 9 }),
+    line('main-loop-heartbeat', 7700, { tick: 2, delayMs: 5200, cpuUserMs: 21, cpuSystemMs: 2 }),
+    line('main-loop-heartbeat', 9000, { tick: 3, delayMs: 300, cpuUserMs: 17, cpuSystemMs: 1 })
+  ].join('\n')
+  const r = summarizeTrace(input, 'qa', 'attempt-1')
+  assert.equal(r.heartbeatSamples, 3)
+  assert.equal(r.cpuSampledHeartbeats, 3)
+  assert.equal(r.maxHeartbeatDelayMs, 5200)
+  assert.equal(r.cpuUserMsAtMaxLag, 21)
+  assert.equal(r.cpuSystemMsAtMaxLag, 2)
+})
+
+test('legacy heartbeat without CPU readings retains the gap but not invented CPU', () => {
+  const input = line('main-loop-heartbeat', 6000, { tick: 2, delayMs: 3800 })
+  const r = summarizeTrace(input, 'qa', 'attempt-1')
+  assert.equal(r.heartbeatSamples, 1)
+  assert.equal(r.cpuSampledHeartbeats, 0)
+  assert.equal(r.maxHeartbeatDelayMs, 3800)
+  assert.equal(r.cpuUserMsAtMaxLag, null)
+  assert.equal(r.cpuSystemMsAtMaxLag, null)
+  assert.equal(summarizeTrace(line('window-shown', 900), 'qa', 'attempt-2').maxHeartbeatDelayMs, null)
+  assert.equal(formatCSV([r]).includes('undefined'), false)
+})
