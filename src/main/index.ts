@@ -14,6 +14,7 @@ import { applyCrashUploadConsent, initializeCrashReporting } from './services/te
 import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
 import { deferAdbRuntimeForQa, startStartupHeartbeat, traceStartup } from './startupTrace'
 import { StartupServiceGate } from './startupServiceGate'
+import { createDeferredRendererFailureGuard } from './deferredRendererFailureGuard'
 import { getQaProfileDir } from './qaProfile'
 
 
@@ -227,17 +228,14 @@ async function bootstrap(): Promise<void> {
   mainWindow = createMainWindow(paths)
   traceStartup('bootstrap-window-created')
   if (uiFirstQa) {
-    // A failed renderer load means its 'ready-to-show' event may never fire.
-    // Reject queued ADB IPC rather than leave requests hanging indefinitely.
-    mainWindow.webContents.on('did-fail-load', (_event, errorCode, _message, _url, isMainFrame) => {
-      if (isMainFrame && errorCode !== -3) {
-        traceStartup('deferred-runtime-renderer-failed', { errorCode })
-        servicesGate.fail(new Error('Wirebound could not load its interface. Please restart the app.'))
-      }
+    // Without a usable renderer, 'ready-to-show' might never fire and queued
+    // IPC would otherwise remain pending for the lifetime of the process.
+    const failureGuard = createDeferredRendererFailureGuard(servicesGate, traceStartup)
+    mainWindow.webContents.on('did-fail-load', (_event, code, _message, _url, mainFrame) => {
+      failureGuard.onFailedLoad(code, mainFrame)
     })
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
-      traceStartup('deferred-runtime-renderer-gone', { reason: details.reason })
-      servicesGate.fail(new Error('Wirebound interface unexpectedly stopped. Please restart the app.'))
+      failureGuard.onRendererGone(details.reason)
     })
   }
 
