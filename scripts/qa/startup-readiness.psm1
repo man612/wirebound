@@ -1,30 +1,37 @@
-# Evaluate renderer initialization and window visibility independently.
-# A QA-only DOM probe can precede the first 'ready-to-show' event.
+# QA-only startup readiness. Legacy traces lack the UI mark; newer traces must
+# confirm the post-settings UI commit, not merely a blank React placeholder.
 function Get-WireboundStartupReadiness {
   [CmdletBinding()]
   param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]] $Events)
 
   $mounted = $false
   $shown = $false
+  $hasUiMarkField = $false
+  $uiCommitted = $false
   $failedBeforeReady = $false
   $ready = $false
 
-  # The event stream is chronological. Stop at the FIRST success or failure.
-  # A QA-initiated taskkill may append render-process-gone (reason='killed')
-  # AFTER the renderer was already ready; that does not invalidate startup.
+  # Evaluate chronologically. QA cleanup may kill the renderer AFTER success.
   foreach ($entry in $Events) {
     if ($entry.event -in @('renderer-load-rejected', 'render-process-gone', 'bootstrap-rejected')) {
       $failedBeforeReady = $true
       break
     }
-    if ($entry.event -eq 'renderer-root-probe' -and
-        $entry.rootChildren -is [ValueType] -and $entry.rootChildren -gt 0) {
-      $mounted = $true
+    if ($entry.event -in @('renderer-timing-early', 'renderer-root-probe')) {
+      $mark = $entry.PSObject.Properties['uiSettingsReadyMs']
+      if ($null -ne $mark) { $hasUiMarkField = $true }
+      if ($entry.rootChildren -is [ValueType] -and $entry.rootChildren -gt 0) {
+        $mounted = $true
+        # A mark without actual mounted content is insufficient. -1 means
+        # unavailable *at this probe*, not proof that the UI later completed.
+        if ($null -ne $mark -and $mark.Value -is [ValueType] -and
+            [double]$mark.Value -ge 0) {
+          $uiCommitted = $true
+        }
+      }
     }
-    if ($entry.event -eq 'window-shown') {
-      $shown = $true
-    }
-    if ($mounted -and $shown) {
+    if ($entry.event -eq 'window-shown') { $shown = $true }
+    if ($mounted -and $shown -and (-not $hasUiMarkField -or $uiCommitted)) {
       $ready = $true
       break
     }
@@ -33,6 +40,8 @@ function Get-WireboundStartupReadiness {
   [pscustomobject]@{
     rootMounted = $mounted
     windowShown = $shown
+    uiMarkObserved = $hasUiMarkField
+    uiCommitted = $uiCommitted
     failureRecorded = $failedBeforeReady
     ready = $ready
   }
