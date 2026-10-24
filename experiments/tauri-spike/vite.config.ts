@@ -9,6 +9,9 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 export default defineConfig({
   root: spikeDir,
   resolve: {
+    // The shared renderer lives outside this package; prevent duplicate React
+    // instances (invalid hook calls) when both node_modules directories exist.
+    dedupe: ['react', 'react-dom', 'lucide-react'],
     alias: {
       '@renderer': fileURLToPath(new URL('../../src/renderer/src', import.meta.url))
     }
