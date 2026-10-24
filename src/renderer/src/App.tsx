@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import TitleBar from './components/layout/TitleBar'
 import Sidebar from './components/layout/Sidebar'
 import OnboardingScreen from './components/OnboardingScreen'
 import Dashboard from './components/views/Dashboard'
-import Settings from './components/views/Settings'
+// Settings is not on the initial dashboard/onboarding path. Load on navigation.
+const Settings = lazy(() => import('./components/views/Settings'))
 import { useAppVersion, useDevices, useDiagnostics, useGnirehtet, useSettings } from './hooks'
 import type { Language } from './i18n'
 import { translations } from './i18n'
@@ -87,12 +88,20 @@ function App(): React.JSX.Element {
                 />
               )}
               {activePage === 'settings' && (
-                <Settings
-                  settings={settings}
-                  updateSettings={updateSettings}
-                  version={version}
-                  t={t}
-                />
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center bg-bg-surface text-sm text-text-secondary" role="status">
+                      {t.settings}...
+                    </div>
+                  }
+                >
+                  <Settings
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    version={version}
+                    t={t}
+                  />
+                </Suspense>
               )}
             </div>
           </main>
