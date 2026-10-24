@@ -181,4 +181,118 @@ describe('GnirehtetService lifecycle scenarios', () => {
     expect(stopAllClients).toHaveBeenCalledOnce()
     expect(service.getStatus()).toBe('error')
   })
+
+  it('single-flights concurrent starts while ADB readiness is pending', async () => {
+    let releaseAdb!: () => void
+    const ready = new Promise<void>((resolve) => { releaseAdb = resolve })
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const { adb, ensureServerReady } = createAdbDouble()
+    ensureServerReady.mockReturnValue(ready)
+    const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true)
+
+    const first = service.start('8.8.8.8', '31416')
+    const second = service.start('8.8.8.8', '31416')
+    expect(spawnProcess).not.toHaveBeenCalled()
+
+    releaseAdb()
+    expect(await Promise.all([first, second])).toEqual([{ success: true }, { success: true }])
+    expect(spawnProcess).toHaveBeenCalledTimes(1)
+    expect(service.getStatus()).toBe('connecting')
+  })
+
+  it('does not start a relay after Stop finishes while ADB was pending', async () => {
+    let releaseAdb!: () => void
+    const ready = new Promise<void>((resolve) => { releaseAdb = resolve })
+    const spawnProcess = vi.fn(() => createFakeProcess()) as unknown as typeof import('child_process').spawn
+    const { adb, ensureServerReady, stopAllClients } = createAdbDouble()
+    ensureServerReady.mockReturnValue(ready)
+    const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true)
+
+    const inFlightStart = service.start('8.8.8.8', '31416')
+    await expect(service.stop()).resolves.toEqual({ success: true })
+    releaseAdb()
+
+    await expect(inFlightStart).resolves.toEqual({
+      success: false, error: 'Wirebound engine start was cancelled.'
+    })
+    expect(stopAllClients).toHaveBeenCalledOnce()
+    expect(spawnProcess).not.toHaveBeenCalled()
+    expect(service.getStatus()).toBe('disconnected')
+  })
+
+  it('does not allow a replacement relay until an old stopping child confirms exit', async () => {
+    vi.useFakeTimers()
+    try {
+      const oldChild = createFakeProcess()
+      // A realistic unresponsive child receives kill() but never emits close in time.
+      oldChild.kill = vi.fn(() => true)
+      const newChild = createFakeProcess()
+      const spawnProcess = vi.fn()
+        .mockReturnValueOnce(oldChild).mockReturnValueOnce(newChild) as unknown as typeof import('child_process').spawn
+      const { adb } = createAdbDouble()
+      const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true)
+
+      await service.start('8.8.8.8', '31416')
+      const stopping = service.stop()
+      await vi.advanceTimersByTimeAsync(2000)
+      const outcome = await stopping
+      expect(outcome.success).toBe(false)
+      expect(service.getStatus()).toBe('error')
+      expect((await service.start('8.8.8.8', '31416')).success).toBe(false)
+      expect(spawnProcess).toHaveBeenCalledTimes(1)
+
+      // Late completion must not trigger a second, unrelated client cleanup.
+      oldChild.emit('close', 7)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnProcess).toHaveBeenCalledTimes(1)
+      await expect(service.start('8.8.8.8', '31416')).resolves.toEqual({ success: true })
+      expect(spawnProcess).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not overwrite a new relay status when an old unexpected-exit cleanup resolves late', async () => {
+    let releaseCleanup!: (count: number) => void
+    const delayedCleanup = new Promise<number>((resolve) => { releaseCleanup = resolve })
+    const oldChild = createFakeProcess()
+    const newChild = createFakeProcess()
+    const spawnProcess = vi.fn()
+      .mockReturnValueOnce(oldChild).mockReturnValueOnce(newChild) as unknown as typeof import('child_process').spawn
+    const { adb, stopAllClients } = createAdbDouble()
+    stopAllClients.mockReturnValueOnce(delayedCleanup)
+    const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true)
+
+    await service.start('8.8.8.8', '31416')
+    oldChild.emit('close', 7)
+    await service.start('8.8.8.8', '31416')
+    releaseCleanup(0)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(spawnProcess).toHaveBeenCalledTimes(2)
+    expect(service.getStatus()).toBe('connecting')
+  })
+
+  it('shares the actual Stop result rather than reporting an early success to a second caller', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const { adb, stopAllClients } = createAdbDouble()
+    let finishCleanup!: (count: number) => void
+    stopAllClients.mockReturnValue(new Promise<number>((resolve) => { finishCleanup = resolve }))
+    const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true)
+
+    await service.start('8.8.8.8', '31416')
+    const first = service.stop()
+    const second = service.stop()
+    let secondSettled = false
+    void second.then(() => { secondSettled = true })
+    await Promise.resolve()
+    expect(secondSettled).toBe(false)
+    finishCleanup(2)
+    expect(await Promise.all([first, second])).toEqual([{ success: true }, { success: true }])
+    expect(stopAllClients).toHaveBeenCalledOnce()
+  })
+
 })
