@@ -67,3 +67,14 @@ Evidence:
 - F:\Wirebound-Lab\benchmarks\issue44-ui-first-normal-control-20261024\attempt-1\startup.jsonl
 
 **Interpretation:** This verifies lifecycle ordering, NOT a speedup. The UI-first attempt had a 17.6s startup and the immediately following normal control 0.64s amid drastically different cache/OS/HDD conditions. These sequential trials are not a controlled performance comparison. The native-window, renderer and early module stages still showed severe long-tail variation independently of ADB preparation. A true first-paint metric remains to be implemented, and actual Android tethering and installed NSIS parity are untested. Mode remains QA-only, PR Draft and issue #44 Open.
+
+
+## 2026-10-24 follow-up: renderer failure fail-fast and paint metrics
+
+Further audit found that the deferred service gate was activated on the BrowserWindow show event only. If Chromium failed to load the main frame and never displayed the window, device IPC could remain pending indefinitely. PR #51 now rejects the pending gate when a *main-frame* did-fail-load (except expected ERR_ABORTED code -3) or a renderer-process-gone event occurs. These paths do not trigger a blind reload. A subframe load failure or aborted navigation alone must not abort services. A completed readiness barrier cannot be retroactively rejected. Dedicated unit tests cover all four cases. Ongoing ADB pollers also stop sending stale snapshots if shutdown began while polling was awaiting a device response.
+
+The existing QA-only renderer-root probe now records navigation-relative Performance Timeline first-paint and first-contentful-paint values (in milliseconds; -1 if unavailable), alongside the root child count and document readyState. This reads only performance numbers; no DOM text, URL, file path, settings or device ID is captured. Chromium paint entries and window-shown are distinct milestones: neither should be used as a substitute for the other, and trace correctness must be verified in actual Windows smoke tests.
+
+The Settings page was also switched to a React.lazy dynamic import with a localized loading placeholder; dashboard and initial onboarding remain eager to preserve their current startup UX. TypeScript/web build confirmed Vite emitted a **25,986-byte Settings JS chunk**, and the initial renderer JS bundle decreased from **665,290 bytes to 642,681 bytes** (22,609 bytes / approximately 3.4% smaller). This is a **bundle-byte reduction, not a measured 3.4% startup speedup**. Verify actual Settings navigation and error behavior in an isolated packaged UI before release.
+
+Windows checks after renderer failure changes: **75/75 Vitest tests passed across 13 test files**, Node and web typechecks passed, main/preload/renderer production build passed. The on-demand Settings change also passed the subsequent production source build. The official NSIS installer, device tethering parity and repeatable long-tail startup measurements remain outstanding.
