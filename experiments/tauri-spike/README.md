@@ -25,8 +25,13 @@ The current Windows QA machine has Node/npm but no Rust/MSVC compiler. **Do not 
 
 ## Build and run
 
-Run in the repository root's experiments/tauri-spike directory:
+The shared UI sources resolve React, Lucide, and Tailwind packages from the
+**repository root**, so install the current Wirebound dependencies separately.
+This does not update their versions or the production lockfile:
 
+    # From the repository root
+    npm ci
+    cd experiments/tauri-spike
     npm install
     npm run dev
 
