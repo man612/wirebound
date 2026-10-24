@@ -47,20 +47,22 @@ The package currently has no committed npm/Cargo lock files; generate and commit
 
 1. Build the **release** Tauri executable on Windows with the required toolchain.
 2. Ensure no instance of the lab app is running.
-3. Execute measure-tauri.ps1 against the built executable. It uses a visible native window and records elapsed time, main-process memory and a best-effort descendant-process sum.
-4. Repeat for an idle Windows session, then while the same background applications are open.
+3. Execute measure-tauri.ps1 against the built executable. Tauri's native window initially remains hidden and is shown only after the existing React dashboard is mounted; this is deliberately closer to Electron's ready-to-show than a blank native window. The script then records visible-window elapsed time, main-process memory and a best-effort descendant-process sum.
+4. Compare equivalent UI states: the lab forces onboardingCompleted=true, dark theme, English, no devices. Prepare an **isolated** Electron QA profile with the SAME state before comparing. Repeat for an idle Windows session, then while the same background applications are open.
 5. For Electron, **reuse the corrected issue #44 packaged-app QA harness with VERIFIED isolated userData**. Do not run ordinary installed Wirebound with its real profile for comparisons. Keep trace/no-trace configurations and the exact benchmark window consistent.
 6. Capture CPU / disk activity, storage type, Windows Defender activity, raw results and any timeouts. Include WebView2 helper processes in memory comparisons; a single Tauri process measurement is misleading.
 7. Do not compare installer size unless BOTH applications include equivalent features and required runtime binaries (ADB, Gnirehtet and their dependencies). Tauri Lab excludes these intentionally.
 
 ### Acceptance before considering migration
 
-- Actual native Tauri release executable builds and displays the SAME UI.
+- Actual native Tauri release executable builds and displays the SAME UI (matching onboarding/settings/device-state fixture in each shell).
 - At least 10 non-traced starts per condition on the same PC, with raw measurements retained.
 - Profile isolation verified for both apps; no production data touched.
 - No long-tail startup regressions, blank windows or orphaned processes.
 - Resource comparisons include subprocesses and both private/working-set memory.
 - Real ADB/Gnirehtet process lifecycle, tray and quit cleanup, settings, diagnostics, signed/unsigned installer behavior and security checks would require **separate feature-parity implementation and tests**.
+
+The Rust show-after-render signal only proves React mounted a dashboard DOM node, **not** that its first pixels were fully painted or that Electron and Tauri window events are perfectly equivalent. Also collect visual frame-readiness evidence before drawing definitive conclusions.
 
 No benchmark numbers have been collected by creating these source files.
 
