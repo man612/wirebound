@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, Tray } from 'electron'
+import { mkdirSync } from 'node:fs'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { getRuntimePaths } from './appPaths'
+import { finishRuntimePathsAfterWindow, getRuntimePaths } from './appPaths'
 import type { RuntimePaths } from './appPaths'
 import { registerIpcHandlers } from './ipc'
 import { createMainWindow } from './window'
@@ -11,6 +12,10 @@ import { applyDeviceTunnelStates } from './deviceState'
 import { getDevicePollInterval } from './polling'
 import { applyCrashUploadConsent, initializeCrashReporting } from './services/telemetryService'
 import type { AdbSnapshot, AppSettings, ConnectionStatus, LogEntry } from '../shared/types'
+import { deferAdbRuntimeForQa, startStartupHeartbeat, traceStartup } from './startupTrace'
+import { StartupServiceGate } from './startupServiceGate'
+import { createDeferredRendererFailureGuard } from './deferredRendererFailureGuard'
+import { getQaProfileDir } from './qaProfile'
 
 
 let mainWindow: BrowserWindow | null = null
@@ -23,8 +28,25 @@ let gnirehtetService: GnirehtetService | null = null
 let handlersRegistered = false
 let shutdownStarted = false
 let shutdownComplete = false
+const servicesGate = new StartupServiceGate<ReturnType<typeof ensureServices>>()
 
+// The QA harness must never write into the normal Electron userData path.
+// Electron does not necessarily honor changed APPDATA in a spawned process;
+// override userData/sessionData before 'ready' only for explicit QA isolation.
+const qaProfileDir = getQaProfileDir()
+// Only the accepted isolated QA userData enables the opt-in UI-first path.
+const uiFirstQa = deferAdbRuntimeForQa && Boolean(qaProfileDir)
+if (qaProfileDir) {
+  mkdirSync(qaProfileDir, { recursive: true })
+  app.setPath('userData', qaProfileDir)
+  app.setPath('sessionData', qaProfileDir)
+  traceStartup('qa-profile-isolated')
+}
+
+traceStartup('main-module-start')
+startStartupHeartbeat()
 initializeCrashReporting()
+traceStartup('crash-reporting-initialized')
 
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
@@ -142,6 +164,8 @@ async function getDeviceSnapshot(adb: AdbService, engine: GnirehtetService): Pro
 function startDevicePolling(adb: AdbService, engine: GnirehtetService): void {
   const poll = async (): Promise<void> => {
     const snapshot = await getDeviceSnapshot(adb, engine)
+    // Stop completion-time sends too; a poll already in flight may outlive quit.
+    if (shutdownStarted) return
     sendToRenderer('adb:devices-change', snapshot)
 
     if (!shutdownStarted) {
@@ -170,7 +194,9 @@ function getSelectedDns(settings: AppSettings): string {
 
 function ensureServices(): { paths: RuntimePaths; adb: AdbService; engine: GnirehtetService } {
   if (!runtimePaths) {
+    traceStartup('runtime-paths-start')
     runtimePaths = getRuntimePaths()
+    traceStartup('runtime-paths-ready')
   }
 
   if (!adbService) {
@@ -185,11 +211,60 @@ function ensureServices(): { paths: RuntimePaths; adb: AdbService; engine: Gnire
 }
 
 async function bootstrap(): Promise<void> {
-  const { paths, adb, engine } = ensureServices()
+  traceStartup('bootstrap-start')
+  // In the isolated QA experiment, discover icon/resource locations without
+  // hashing ADB files on the critical path to the first visible window.
+  // Normal installed launches still prepare ADB synchronously as before.
+  const paths = uiFirstQa
+    ? getRuntimePaths({ deferAdbPreparation: true })
+    : ensureServices().paths
+  if (!uiFirstQa) servicesGate.start(ensureServices)
+  traceStartup('settings-load-start')
   const settings = loadSettings()
+  traceStartup('settings-load-ready')
   applyCrashUploadConsent(settings.telemetryEnabled)
+  traceStartup('crash-consent-applied')
 
   mainWindow = createMainWindow(paths)
+  traceStartup('bootstrap-window-created')
+  if (uiFirstQa) {
+    // Without a usable renderer, 'ready-to-show' might never fire and queued
+    // IPC would otherwise remain pending for the lifetime of the process.
+    const failureGuard = createDeferredRendererFailureGuard(servicesGate, traceStartup)
+    mainWindow.webContents.on('did-fail-load', (_event, code, _message, _url, mainFrame) => {
+      failureGuard.onFailedLoad(code, mainFrame)
+    })
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+      failureGuard.onRendererGone(details.reason)
+    })
+  }
+
+  if (uiFirstQa) {
+    const window = mainWindow
+    window.once('show', () => {
+      traceStartup('deferred-runtime-scheduled')
+      // React can show its first window before any large HDD hash/copy work.
+      // The async fs operations do not synchronously block the main event loop.
+      setTimeout(() => {
+        if (shutdownStarted || window.isDestroyed()) {
+          servicesGate.fail(new Error('Wirebound is shutting down.'))
+          return
+        }
+        servicesGate.start(async () => {
+          traceStartup('deferred-runtime-start')
+          const preparedPaths = await finishRuntimePathsAfterWindow(paths)
+          if (shutdownStarted) throw new Error('Wirebound is shutting down.')
+          runtimePaths = preparedPaths
+          adbService = new AdbService(preparedPaths)
+          gnirehtetService = new GnirehtetService(
+            preparedPaths, adbService, sendLog, sendStatus
+          )
+          traceStartup('deferred-runtime-ready')
+          return { paths: preparedPaths, adb: adbService, engine: gnirehtetService }
+        })
+      }, 0)
+    })
+  }
   mainWindow.on('close', (event) => {
     if (shutdownStarted) return
     event.preventDefault()
@@ -199,12 +274,15 @@ async function bootstrap(): Promise<void> {
     mainWindow = null
   })
   ensureTray(paths)
+  traceStartup('tray-ready')
 
   if (!handlersRegistered) {
     registerIpcHandlers({
-      adbService: adb,
-      gnirehtetService: engine,
-      getDeviceSnapshot: () => getDeviceSnapshot(adb, engine),
+      getServices: () => servicesGate.wait(),
+      getDeviceSnapshot: async () => {
+        const { adb, engine } = await servicesGate.wait()
+        return getDeviceSnapshot(adb, engine)
+      },
       getMainWindow: () => mainWindow,
       hideToTray: hideMainWindowToTray,
       onSettingsChanged: (settings) => {
@@ -214,10 +292,15 @@ async function bootstrap(): Promise<void> {
     })
     handlersRegistered = true
   }
+  traceStartup('ipc-ready')
 
+  const { adb, engine } = await servicesGate.wait()
+  if (shutdownStarted) return
   try {
     await adb.ensureServerReady()
+    traceStartup('adb-server-ready')
   } catch (error) {
+    traceStartup('adb-server-unavailable')
     console.warn('Wirebound: ADB server was not ready during bootstrap.', error)
   }
 
@@ -228,6 +311,7 @@ async function bootstrap(): Promise<void> {
   if (settings.autoStart && engine.getStatus() === 'disconnected') {
     void engine.start(getSelectedDns(settings), settings.port)
   }
+  traceStartup('bootstrap-complete')
 }
 
 async function shutdown(): Promise<void> {
@@ -236,6 +320,7 @@ async function shutdown(): Promise<void> {
   }
 
   shutdownStarted = true
+  servicesGate.fail(new Error('Wirebound is shutting down.'))
   stopDevicePolling()
 
   try {
@@ -249,6 +334,7 @@ async function shutdown(): Promise<void> {
 }
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
+traceStartup('single-instance-lock', { acquired: hasSingleInstanceLock })
 
 if (!hasSingleInstanceLock) {
   app.quit()
@@ -257,14 +343,31 @@ if (!hasSingleInstanceLock) {
     showMainWindow()
   })
 
+  app.on('child-process-gone', (_event, details) => {
+    // GPU and utility process failures are distinct from renderer crashes.
+    // Record only the Electron-defined type/reason/code, never process paths.
+    traceStartup('child-process-gone', {
+      type: details.type,
+      reason: details.reason,
+      exitCode: details.exitCode
+    })
+  })
+
   app.whenReady().then(() => {
+    traceStartup('app-when-ready')
     electronApp.setAppUserModelId('com.wirebound.app')
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)
     })
 
-    void bootstrap()
+    void bootstrap().catch((error: unknown) => {
+      servicesGate.fail(error)
+      traceStartup('bootstrap-rejected', {
+        errorType: error instanceof Error ? error.name : 'unknown'
+      })
+      console.error('Wirebound: Startup failed.', error)
+    })
 
     app.on('activate', () => {
       if (mainWindow && !mainWindow.isDestroyed()) {

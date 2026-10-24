@@ -1,7 +1,14 @@
-import { createHash } from 'crypto'
 import { app } from 'electron'
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync } from 'fs'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'path'
+import { skipAdbCacheForQa, traceStartup } from './startupTrace'
+import {
+  fingerprintAdbRuntime,
+  fingerprintAdbRuntimeAsync,
+  verifyAndPopulateAdbCache,
+  verifyAndPopulateAdbCacheAsync
+} from './adbCacheFingerprint'
 
 export interface RuntimePaths {
   root: string
@@ -13,52 +20,30 @@ export interface RuntimePaths {
   trayIcon: string
 }
 
-const ADB_RUNTIME_FILES = ['adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'] as const
-
 function firstExisting(candidates: string[], fallback: string): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? fallback
 }
 
-function hashFile(file: string): string {
-  return createHash('sha256').update(readFileSync(file)).digest('hex')
-}
-
-function hashFiles(directory: string): string {
-  const hash = createHash('sha256')
-
-  for (const filename of ADB_RUNTIME_FILES) {
-    const file = join(directory, filename)
-    if (!existsSync(file)) throw new Error(`Missing ADB runtime file: ${file}`)
-    hash.update(filename)
-    hash.update(readFileSync(file))
-  }
-
-  return hash.digest('hex').slice(0, 16)
-}
-
 function prepareAdbCache(sourceDir: string): string {
   try {
-    const fingerprint = hashFiles(sourceDir)
+    traceStartup('adb-cache-fingerprint-start')
+    const { fingerprint, sourceHashes } = fingerprintAdbRuntime(sourceDir)
+    traceStartup('adb-cache-fingerprint-ready')
     const localRoot = process.env.LOCALAPPDATA ?? app.getPath('userData')
     const cacheDir = join(localRoot, 'Wirebound', 'runtime', `platform-tools-${fingerprint}`)
     mkdirSync(cacheDir, { recursive: true })
-
-    for (const filename of ADB_RUNTIME_FILES) {
-      const source = join(sourceDir, filename)
-      const destination = join(cacheDir, filename)
-      if (!existsSync(destination) || hashFile(destination) !== hashFile(source)) {
-        copyFileSync(source, destination)
-      }
-    }
-
+    traceStartup('adb-cache-verify-start')
+    const copied = verifyAndPopulateAdbCache(sourceDir, cacheDir, sourceHashes)
+    traceStartup('adb-cache-verify-ready', { filesCopied: copied })
     return cacheDir
   } catch (error) {
+    traceStartup('adb-cache-fallback')
     console.warn('Wirebound: Failed to prepare the local ADB cache; using bundled runtime.', error)
     return sourceDir
   }
 }
 
-export function getRuntimePaths(): RuntimePaths {
+export function getRuntimePaths(options: { deferAdbPreparation?: boolean } = {}): RuntimePaths {
   const devRoot = process.cwd()
   const packagedRoot = process.resourcesPath
   const appRoot = app.getAppPath()
@@ -73,7 +58,11 @@ export function getRuntimePaths(): RuntimePaths {
     rootCandidates.map((candidate) => join(candidate, 'bin', 'platform-tools')),
     join(root, 'bin', 'platform-tools')
   )
-  const adbDir = prepareAdbCache(bundledAdbDir)
+  const adbDir =
+    options.deferAdbPreparation || skipAdbCacheForQa
+      ? bundledAdbDir
+      : prepareAdbCache(bundledAdbDir)
+  if (skipAdbCacheForQa && !options.deferAdbPreparation) traceStartup('adb-cache-skipped-qa')
   const trayIcon = firstExisting(
     rootCandidates.flatMap((candidate) => [
       join(candidate, 'icon.ico'),
@@ -100,5 +89,36 @@ export function getRuntimePaths(): RuntimePaths {
     adbExe: join(adbDir, 'adb.exe'),
     icon,
     trayIcon
+  }
+}
+
+
+/**
+ * Complete an initially UI-only path selection after the window is visible.
+ * The returned paths MUST be used to create ADB and Gnirehtet services;
+ * the unverified bundled paths must never be used by those services.
+ */
+export async function finishRuntimePathsAfterWindow(paths: RuntimePaths): Promise<RuntimePaths> {
+  if (skipAdbCacheForQa) {
+    traceStartup('adb-cache-skipped-qa')
+    return paths
+  }
+
+  const sourceDir = paths.adbDir
+  try {
+    traceStartup('adb-cache-fingerprint-start')
+    const { fingerprint, sourceHashes } = await fingerprintAdbRuntimeAsync(sourceDir)
+    traceStartup('adb-cache-fingerprint-ready')
+    const localRoot = process.env.LOCALAPPDATA ?? app.getPath('userData')
+    const cacheDir = join(localRoot, 'Wirebound', 'runtime', `platform-tools-${fingerprint}`)
+    await mkdir(cacheDir, { recursive: true })
+    traceStartup('adb-cache-verify-start')
+    const copied = await verifyAndPopulateAdbCacheAsync(sourceDir, cacheDir, sourceHashes)
+    traceStartup('adb-cache-verify-ready', { filesCopied: copied })
+    return { ...paths, adbDir: cacheDir, adbExe: join(cacheDir, 'adb.exe') }
+  } catch (error) {
+    traceStartup('adb-cache-fallback')
+    console.warn('Wirebound: Could not prepare the ADB cache asynchronously; using bundled runtime.', error)
+    return paths
   }
 }

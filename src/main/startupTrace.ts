@@ -1,0 +1,105 @@
+import { appendFileSync } from 'node:fs'
+import { isAbsolute } from 'node:path'
+import { performance } from 'node:perf_hooks'
+
+// Opt-in QA-only event timeline. Never enabled for ordinary app launches.
+// Callers must pass metadata only: no device IDs, user data, URLs or filesystem paths.
+const traceFile = process.env.WIREBOUND_QA_STARTUP_TRACE
+export const startupTraceEnabled = Boolean(traceFile && isAbsolute(traceFile))
+// QA experiment only: bypass Window icon decoding in one of two same-binary
+// startup conditions. Never available without an explicit absolute trace path.
+export const skipWindowIconForQa =
+  startupTraceEnabled && process.env.WIREBOUND_QA_SKIP_WINDOW_ICON === '1'
+
+// QA-only A/B: use the packaged ADB runtime directly, without preparing a
+// per-user cache. Both absolute trace and isolated userData are mandatory;
+// regular launches always keep the original cache verification behavior.
+export const skipAdbCacheForQa =
+  startupTraceEnabled &&
+  process.env.WIREBOUND_QA_PROFILE_ISOLATION === '1' &&
+  process.env.WIREBOUND_QA_SKIP_ADB_CACHE === '1'
+
+// Explicit QA opt-in while the UI-first lifecycle is validated on real Windows.
+// Normal release startup is deliberately unchanged until installed-app QA passes.
+export const deferAdbRuntimeForQa =
+  startupTraceEnabled &&
+  process.env.WIREBOUND_QA_PROFILE_ISOLATION === '1' &&
+  process.env.WIREBOUND_QA_DEFER_ADB_RUNTIME === '1'
+
+type TraceDetail = Record<string, string | number | boolean | null>
+
+// QA-only measurement of the tracing tool's own synchronous I/O. Each line
+// reports the *previous* write, not the current one, so a slow append cannot
+// hide inside an unmeasured portion of the next startup phase.
+let previousTraceWriteMs = 0
+let totalTraceWriteMs = 0
+let maxTraceWriteMs = 0
+
+export function traceStartup(event: string, details: TraceDetail = {}): void {
+  if (!startupTraceEnabled || !traceFile) return
+
+  try {
+    const payload = JSON.stringify({
+      time: new Date().toISOString(),
+      pid: process.pid,
+      elapsedMs: Math.round(process.uptime() * 1000),
+      event,
+      ...details,
+      tracePreviousWriteMs: Math.round(previousTraceWriteMs * 1000) / 1000,
+      traceTotalWriteMs: Math.round(totalTraceWriteMs * 1000) / 1000,
+      traceMaxWriteMs: Math.round(maxTraceWriteMs * 1000) / 1000
+    }) + '\n'
+    const started = performance.now()
+    appendFileSync(traceFile, payload, 'utf8')
+    previousTraceWriteMs = performance.now() - started
+    totalTraceWriteMs += previousTraceWriteMs
+    maxTraceWriteMs = Math.max(maxTraceWriteMs, previousTraceWriteMs)
+  } catch {
+    // Instrumentation must not prevent the application from starting.
+  }
+}
+
+const HEARTBEAT_INTERVAL_MS = 1000
+const HEARTBEAT_MAX_MS = 120_000
+const HEARTBEAT_DELAY_THRESHOLD_MS = 500
+const HEARTBEAT_PERIODIC_TICKS = 5
+
+/**
+ * Opt-in QA-only watchdog. A delayed timer suggests the main process event
+ * loop or OS scheduling was stalled; regular ticks during a stuck page point
+ * to renderer/navigation or another asynchronous wait instead.
+ *
+ * Events include only elapsed/tick/delay numbers, never any paths or user data.
+ * This timer is unref'd and self-terminates so it cannot keep Electron alive.
+ */
+export function startStartupHeartbeat(): NodeJS.Timeout | null {
+  if (!startupTraceEnabled) return null
+
+  let previous = performance.now()
+  let previousCpu = process.cpuUsage()
+  const started = previous
+  let ticks = 0
+  const timer = setInterval(() => {
+    const now = performance.now()
+    // Per-process CPU time, not system-wide CPU and not child-process CPU.
+    // A delayed heartbeat with low CPU can indicate waiting, blocking I/O,
+    // or OS scheduling; it cannot by itself distinguish these causes.
+    const currentCpu = process.cpuUsage()
+    const cpuUserMs = Math.max(0, Math.round((currentCpu.user - previousCpu.user) / 1000))
+    const cpuSystemMs = Math.max(0, Math.round((currentCpu.system - previousCpu.system) / 1000))
+    previousCpu = currentCpu
+    ticks += 1
+    const delayMs = Math.max(0, Math.round(now - previous - HEARTBEAT_INTERVAL_MS))
+    previous = now
+
+    if (delayMs > HEARTBEAT_DELAY_THRESHOLD_MS || ticks % HEARTBEAT_PERIODIC_TICKS === 0) {
+      traceStartup('main-loop-heartbeat', { tick: ticks, delayMs, cpuUserMs, cpuSystemMs })
+    }
+    if (now - started >= HEARTBEAT_MAX_MS || ticks >= HEARTBEAT_MAX_MS / HEARTBEAT_INTERVAL_MS) {
+      clearInterval(timer)
+    }
+  }, HEARTBEAT_INTERVAL_MS)
+
+  timer.unref()
+  return timer
+}
