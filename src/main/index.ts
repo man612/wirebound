@@ -163,6 +163,8 @@ async function getDeviceSnapshot(adb: AdbService, engine: GnirehtetService): Pro
 function startDevicePolling(adb: AdbService, engine: GnirehtetService): void {
   const poll = async (): Promise<void> => {
     const snapshot = await getDeviceSnapshot(adb, engine)
+    // Stop completion-time sends too; a poll already in flight may outlive quit.
+    if (shutdownStarted) return
     sendToRenderer('adb:devices-change', snapshot)
 
     if (!shutdownStarted) {
@@ -224,6 +226,20 @@ async function bootstrap(): Promise<void> {
 
   mainWindow = createMainWindow(paths)
   traceStartup('bootstrap-window-created')
+  if (uiFirstQa) {
+    // A failed renderer load means its 'ready-to-show' event may never fire.
+    // Reject queued ADB IPC rather than leave requests hanging indefinitely.
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, _message, _url, isMainFrame) => {
+      if (isMainFrame && errorCode !== -3) {
+        traceStartup('deferred-runtime-renderer-failed', { errorCode })
+        servicesGate.fail(new Error('Wirebound could not load its interface. Please restart the app.'))
+      }
+    })
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+      traceStartup('deferred-runtime-renderer-gone', { reason: details.reason })
+      servicesGate.fail(new Error('Wirebound interface unexpectedly stopped. Please restart the app.'))
+    })
+  }
 
   if (uiFirstQa) {
     const window = mainWindow
@@ -348,6 +364,7 @@ if (!hasSingleInstanceLock) {
     })
 
     void bootstrap().catch((error: unknown) => {
+      servicesGate.fail(error)
       traceStartup('bootstrap-rejected', {
         errorType: error instanceof Error ? error.name : 'unknown'
       })
