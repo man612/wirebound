@@ -18,3 +18,10 @@ Read [docs/CI_LOCAL_VALIDATION.md](docs/CI_LOCAL_VALIDATION.md) before interpret
 - Preserve real ADB/VPN status, true cumulative TUN RX/TX counts, translation, keyboard accessibility, Dark/Light behavior and reduced-motion preferences. Do not fake scanning or force scrolling to logs.
 - Document any before/after screenshots only after masking Android device serial/IDs. The maintainer has one physical phone; dual-phone hardware testing is waived.
 - Close/check off each item in #48 only after implementation, tests, and a linked merged PR. Keep GitHub release readiness (#38) separate from these UX requirements.
+
+## Safety audit: concurrent Gnirehtet lifecycle — 2026-10-24
+
+- Read [issue #53](https://github.com/man612/wirebound/issues/53) and [the offline ADB/Gnirehtet lifecycle safety audit](docs/qa/GNIREHTET_LIFECYCLE_SAFETY_AUDIT_2026-10-24.md) before editing `gnirehtetService.ts`, its process events, device cleanup, or start/stop sequencing.
+- Three races were reproduced by executing the original method bodies with fake dependencies (concurrent Start spawns twice; Stop during pending Start allows a late spawn; stale child `close` after a timed-out Stop dispatches unexpected-exit cleanup). These are **isolated JavaScript control-flow reproductions**, not live Windows/USB proof. Do not release or claim they are fixed; add deterministic native Vitest regressions and validate actual hardware before production changes.
+- Do not kill global/shared ADB or other applications' reverse mappings. Preserve masked structured reports and investigate raw device IDs in console/native subprocess logs separately. PR #50 UX and PR #51 startup remain separate and Draft.
+- The Windows QA computer is expected to be offline until roughly Tuesday 2026-10-27 09:00 WIB; do not poll repeatedly, use the normal user profile, install over the user's application, or interpret a project chat's memory as source-of-truth.
