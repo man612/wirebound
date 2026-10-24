@@ -28,21 +28,32 @@ export const deferAdbRuntimeForQa =
 
 type TraceDetail = Record<string, string | number | boolean | null>
 
+// QA-only measurement of the tracing tool's own synchronous I/O. Each line
+// reports the *previous* write, not the current one, so a slow append cannot
+// hide inside an unmeasured portion of the next startup phase.
+let previousTraceWriteMs = 0
+let totalTraceWriteMs = 0
+let maxTraceWriteMs = 0
+
 export function traceStartup(event: string, details: TraceDetail = {}): void {
   if (!startupTraceEnabled || !traceFile) return
 
   try {
-    appendFileSync(
-      traceFile,
-      JSON.stringify({
-        time: new Date().toISOString(),
-        pid: process.pid,
-        elapsedMs: Math.round(process.uptime() * 1000),
-        event,
-        ...details
-      }) + '\n',
-      'utf8'
-    )
+    const payload = JSON.stringify({
+      time: new Date().toISOString(),
+      pid: process.pid,
+      elapsedMs: Math.round(process.uptime() * 1000),
+      event,
+      ...details,
+      tracePreviousWriteMs: Math.round(previousTraceWriteMs * 1000) / 1000,
+      traceTotalWriteMs: Math.round(totalTraceWriteMs * 1000) / 1000,
+      traceMaxWriteMs: Math.round(maxTraceWriteMs * 1000) / 1000
+    }) + '\n'
+    const started = performance.now()
+    appendFileSync(traceFile, payload, 'utf8')
+    previousTraceWriteMs = performance.now() - started
+    totalTraceWriteMs += previousTraceWriteMs
+    maxTraceWriteMs = Math.max(maxTraceWriteMs, previousTraceWriteMs)
   } catch {
     // Instrumentation must not prevent the application from starting.
   }
