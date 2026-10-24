@@ -149,44 +149,55 @@ export function registerIpcHandlers({
   const trusted = (event: IpcMainInvokeEvent | IpcMainEvent): void =>
     assertTrustedSender(event, getMainWindow)
 
+  const trustedServices = async (
+    event: IpcMainInvokeEvent
+  ): Promise<{ adb: AdbService; engine: GnirehtetService }> => {
+    trusted(event)
+    const services = await getServices()
+    // A queued IPC must not act on behalf of a renderer that navigated or
+    // was destroyed while waiting for ADB runtime initialization.
+    trusted(event)
+    return services
+  }
+
   ipcMain.handle('gnirehtet:start', (event, dns: unknown, port: unknown) => {
     trusted(event)
-    return getServices().then(({ engine }) =>
+    return trustedServices(event).then(({ engine }) =>
       engine.start(readString(dns, '8.8.8.8'), readString(port, '31416'))
     )
   })
 
   ipcMain.handle('gnirehtet:stop', (event) => {
     trusted(event)
-    return getServices().then(({ engine }) => engine.stop())
+    return trustedServices(event).then(({ engine }) => engine.stop())
   })
 
   ipcMain.handle('gnirehtet:device-start', (event, deviceId: unknown) => {
     trusted(event)
     const settings = loadSettings()
-    return getServices().then(({ engine }) =>
+    return trustedServices(event).then(({ engine }) =>
       engine.startDevice(readString(deviceId), selectedDns(settings), settings.port)
     )
   })
 
   ipcMain.handle('gnirehtet:device-stop', (event, deviceId: unknown) => {
     trusted(event)
-    return getServices().then(({ engine }) => engine.stopDevice(readString(deviceId)))
+    return trustedServices(event).then(({ engine }) => engine.stopDevice(readString(deviceId)))
   })
 
   ipcMain.handle('gnirehtet:status', (event) => {
     trusted(event)
-    return getServices().then(({ engine }) => engine.getStatus())
+    return trustedServices(event).then(({ engine }) => engine.getStatus())
   })
 
   ipcMain.handle('adb:snapshot', (event) => {
     trusted(event)
-    return getDeviceSnapshot()
+    return trustedServices(event).then(() => getDeviceSnapshot())
   })
 
   ipcMain.handle('adb:testSpeed', (event, deviceId: unknown) => {
     trusted(event)
-    return getServices().then(({ adb }) => adb.openSpeedTest(readString(deviceId)))
+    return trustedServices(event).then(({ adb }) => adb.openSpeedTest(readString(deviceId)))
   })
 
   ipcMain.handle('settings:get', (event) => {
@@ -225,7 +236,7 @@ export function registerIpcHandlers({
 
   ipcMain.handle('app:diagnostics', async (event) => {
     trusted(event)
-    const { adb, engine } = await getServices()
+    const { adb, engine } = await trustedServices(event)
     const report = await adb.getDiagnostics(engine.getStatus())
     return {
       ...report,
