@@ -31,6 +31,7 @@ import type {
 } from '../../../../shared/types'
 import type { Language, Translation } from '../../i18n'
 import { formatUiTimestamp, maskDeviceId } from '../../formatters'
+import { hasFailedDiagnosticChecks } from './diagnosticsDisclosure'
 
 interface DashboardProps {
   status: ConnectionStatus
@@ -250,7 +251,7 @@ export default function Dashboard({
   const initialRevealScheduledRef = useRef(false)
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(true)
   const [diagnosticsManuallyToggled, setDiagnosticsManuallyToggled] = useState(false)
-  const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | null>(null)
+  const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | 'issues' | null>(null)
   const [rerunCycle, setRerunCycle] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
   const [reportExported, setReportExported] = useState(false)
@@ -258,6 +259,7 @@ export default function Dashboard({
   const [deviceActionIds, setDeviceActionIds] = useState<Set<string>>(() => new Set())
   const [deviceActionErrors, setDeviceActionErrors] = useState<Record<string, boolean>>({})
   const [readyDismissed, setReadyDismissed] = useState(false)
+  const hasFailedChecks = hasFailedDiagnosticChecks(diagnostics.report)
   const diagnosticsVisible =
     diagnosticsExpanded || (Boolean(diagnostics.error) && !diagnosticsManuallyToggled)
 
@@ -279,13 +281,15 @@ export default function Dashboard({
     ) return
 
     initialRevealScheduledRef.current = true
-    if (diagnostics.error || manuallyToggledRef.current) return
+    // An executed scan may complete successfully yet report an actual failed
+    // runtime/ADB check; do not hide those details automatically.
+    if (diagnostics.error || hasFailedChecks || manuallyToggledRef.current) return
 
     collapseTimerRef.current = window.setTimeout(() => {
       if (!manuallyToggledRef.current) setDiagnosticsExpanded(false)
       collapseTimerRef.current = null
     }, 2600)
-  }, [diagnostics.report, diagnostics.isRunning, diagnostics.error])
+  }, [diagnostics.report, diagnostics.isRunning, diagnostics.error, hasFailedChecks])
 
   useEffect(() => () => {
     if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
@@ -304,15 +308,15 @@ export default function Dashboard({
     if (rerunCycle === 0 || acknowledgedRerunRef.current === rerunCycle) return
     acknowledgedRerunRef.current = rerunCycle
     const failed = Boolean(diagnostics.error)
-    setDiagnosticsFeedback(failed ? 'failed' : 'finished')
-    if (!failed && !manuallyToggledRef.current) {
+    setDiagnosticsFeedback(failed ? 'failed' : hasFailedChecks ? 'issues' : 'finished')
+    if (!failed && !hasFailedChecks && !manuallyToggledRef.current) {
       if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
       collapseTimerRef.current = window.setTimeout(() => {
         if (!manuallyToggledRef.current) setDiagnosticsExpanded(false)
         collapseTimerRef.current = null
       }, 2600)
     }
-  }, [rerunCycle, diagnostics.error])
+  }, [rerunCycle, diagnostics.error, hasFailedChecks])
 
   // Scroll only the terminal viewport, never its ancestor dashboard.
   useEffect(() => {
@@ -585,7 +589,8 @@ export default function Dashboard({
                 <RefreshCw size={12} className="motion-safe:animate-spin" /> {t.diagnosticsChecking}
               </span>
             ) : diagnosticsFeedback === 'finished' ? t.diagnosticsFinished
-              : diagnosticsFeedback === 'failed' ? t.diagnosticsFailed : null}
+              : diagnosticsFeedback === 'issues' ? t.diagnosticsIssues
+                : diagnosticsFeedback === 'failed' ? t.diagnosticsFailed : null}
             {copyState === 'success' && (
               <span className="ml-2 inline-flex items-center gap-1 text-accent-green"><CheckCircle2 size={12} />{t.reportCopySuccess}</span>
             )}
