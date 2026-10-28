@@ -39,6 +39,7 @@ export class GnirehtetService {
   private unexpectedExitCleanup: Promise<void> | null = null
   private lifecycleGeneration = 0
   private readonly requestedStops = new WeakSet<ChildProcessWithoutNullStreams>()
+  private readonly pendingDeviceStarts = new Set<Promise<ActionResult>>()
 
   public constructor(
     private readonly paths: RuntimePaths,
@@ -145,36 +146,66 @@ export class GnirehtetService {
     }
   }
 
-  public async startDevice(
+  public startDevice(
     deviceId: string,
     dnsInput: string,
     portInput: string
   ): Promise<ActionResult> {
-    if (!this.childProcess) {
-      return { success: false, error: 'Start the Wirebound engine before connecting one device.' }
+    const childProcess = this.childProcess
+    if (!childProcess || this.isStopping || this.requestedStops.has(childProcess)) {
+      return Promise.resolve({
+        success: false,
+        error: 'Start the Wirebound engine before connecting one device.'
+      })
     }
     if (!this.isValidDeviceId(deviceId)) {
-      return { success: false, error: 'Device id is invalid.' }
+      return Promise.resolve({ success: false, error: 'Device id is invalid.' })
     }
     this.rememberDeviceId(deviceId)
 
+    const generation = this.lifecycleGeneration
     const dns = normalizeDns(dnsInput)
     const port = normalizePort(portInput)
+    const cancelled = (): boolean =>
+      generation !== this.lifecycleGeneration ||
+      this.isStopping ||
+      this.childProcess !== childProcess ||
+      this.requestedStops.has(childProcess)
 
-    try {
-      await this.adbService.ensureServerReady()
-      await this.runDeviceCommand(['start', deviceId, '-d', dns, '-p', port], 10_000)
-      this.emitSafeLog('Requested tethering start for the selected Android device.', 'info')
-      await this.syncStatusWithDeviceState()
-      return { success: true }
-    } catch (error) {
-      const message = readError(error, 'Failed to start tethering on the selected device.')
-      this.emitSafeLog(message, 'stderr')
-      return {
-        success: false,
-        error: redactGnirehtetLogLine(message, [...this.knownDeviceIds])
+    // Stop must wait for any already dispatched device-start command before
+    // its final Android-client cleanup. Otherwise a delayed command may
+    // reactivate the VPN after a successful Stop has been reported.
+    const pending = (async (): Promise<ActionResult> => {
+      try {
+        await this.adbService.ensureServerReady()
+        if (cancelled()) {
+          return { success: false, error: 'Device start was cancelled because the engine stopped.' }
+        }
+        await this.runDeviceCommand(['start', deviceId, '-d', dns, '-p', port], 10_000)
+        if (cancelled()) {
+          return { success: false, error: 'Device start was cancelled because the engine stopped.' }
+        }
+        this.emitSafeLog('Requested tethering start for the selected Android device.', 'info')
+        await this.syncStatusWithDeviceState()
+        if (cancelled()) {
+          return { success: false, error: 'Device start was cancelled because the engine stopped.' }
+        }
+        return { success: true }
+      } catch (error) {
+        const message = readError(error, 'Failed to start tethering on the selected device.')
+        this.emitSafeLog(message, 'stderr')
+        return {
+          success: false,
+          error: redactGnirehtetLogLine(message, [...this.knownDeviceIds])
+        }
       }
-    }
+    })()
+    this.pendingDeviceStarts.add(pending)
+    void pending.then(
+      () => { this.pendingDeviceStarts.delete(pending) },
+      () => { this.pendingDeviceStarts.delete(pending) }
+    )
+    return pending
   }
 
   public async stopDevice(deviceId: string): Promise<ActionResult> {
@@ -243,6 +274,9 @@ export class GnirehtetService {
         }
       }
 
+      // Drain commands already dispatched while the engine was still live.
+      // Their own calls cannot resurrect a VPN after our final cleanup.
+      await Promise.allSettled([...this.pendingDeviceStarts])
       const stoppedClients = await this.adbService.stopAllClients()
       this.lastAdbError = null
       this.setStatus('disconnected')
