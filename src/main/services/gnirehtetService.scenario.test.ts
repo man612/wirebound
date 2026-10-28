@@ -192,9 +192,9 @@ describe('GnirehtetService lifecycle scenarios', () => {
     )
 
     await service.start('8.8.8.8', '31416')
-    child.stderr.write('2026 ERROR Main: Command adb ["-s", "SYN')
+    child.stderr.emit('data', Buffer.from('2026 ERROR Main: Command adb ["-s", "SYN'))
     expect(logs.some((log) => log.message.includes('SYN'))).toBe(false)
-    child.stderr.write('THETIC-A1", "shell"] returned with value 1\n')
+    child.stderr.emit('data', Buffer.from('THETIC-A1", "shell"] returned with value 1\n'))
 
     const failure = logs.find((log) => log.message.includes('returned with value 1'))
     expect(failure?.type).toBe('stderr')
@@ -212,8 +212,8 @@ describe('GnirehtetService lifecycle scenarios', () => {
     )
 
     await service.start('8.8.8.8', '31416')
-    child.stdout.write('Relay server started\n')
-    child.stderr.write("adb: device 'SYNTHETIC-B2' not found")
+    child.stdout.emit('data', Buffer.from('Relay server started\n'))
+    child.stderr.emit('data', Buffer.from("adb: device 'SYNTHETIC-B2' not found"))
     child.emit('close', 0)
     await Promise.resolve()
 
