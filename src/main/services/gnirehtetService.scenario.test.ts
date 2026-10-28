@@ -366,4 +366,66 @@ describe('GnirehtetService lifecycle scenarios', () => {
     expect(logs.join('\n')).toContain('SY...C3')
   })
 
+
+  it('cancels a per-device start awaiting ADB if Stop begins, even after Stop settles', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const runner = vi.fn().mockResolvedValue('')
+    const { adb, ensureServerReady, stopAllClients } = createAdbDouble()
+    const service = new GnirehtetService(
+      paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true, runner
+    )
+
+    await expect(service.start('8.8.8.8', '31416')).resolves.toEqual({ success: true })
+    let releaseAdb!: () => void
+    const delayedAdb = new Promise<void>((resolve) => { releaseAdb = resolve })
+    ensureServerReady.mockReturnValue(delayedAdb)
+
+    const startingDevice = service.startDevice('SYNTHETIC-STOP-A', '8.8.8.8', '31416')
+    const stopping = service.stop()
+    releaseAdb()
+
+    await expect(startingDevice).resolves.toEqual({
+      success: false, error: 'Device start was cancelled because the engine stopped.'
+    })
+    await expect(stopping).resolves.toEqual({ success: true })
+    expect(runner).not.toHaveBeenCalled()
+    expect(stopAllClients).toHaveBeenCalledOnce()
+    expect(service.getStatus()).toBe('disconnected')
+  })
+
+  it('waits for a previously dispatched device start before final client cleanup', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    let commandEntered!: () => void
+    let releaseCommand!: () => void
+    const entered = new Promise<void>((resolve) => { commandEntered = resolve })
+    const command = new Promise<string>((resolve) => { releaseCommand = () => resolve('') })
+    const runner = vi.fn().mockImplementation(() => {
+      commandEntered()
+      return command
+    })
+    const { adb, stopAllClients } = createAdbDouble()
+    const service = new GnirehtetService(
+      paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true, runner
+    )
+
+    await service.start('8.8.8.8', '31416')
+    const startingDevice = service.startDevice('SYNTHETIC-STOP-B', '8.8.8.8', '31416')
+    await entered
+    const stopping = service.stop()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(stopAllClients).not.toHaveBeenCalled()
+    releaseCommand()
+
+    await expect(startingDevice).resolves.toEqual({
+      success: false, error: 'Device start was cancelled because the engine stopped.'
+    })
+    await expect(stopping).resolves.toEqual({ success: true })
+    expect(runner).toHaveBeenCalledTimes(1)
+    expect(stopAllClients).toHaveBeenCalledOnce()
+    expect(service.getStatus()).toBe('disconnected')
+  })
+
 })
