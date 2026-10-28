@@ -7,7 +7,10 @@ updates:
       day: monday
       time: "03:00"
       timezone: Asia/Jakarta
-    open-pull-requests-limit: 10
+    # Temporarily pause routine version-update PRs while Wirebound v1.2.0 is stabilized.
+    # Dependabot security update PRs use a separate limit and remain enabled.
+    # Restore to 10 after the release stabilization work is complete.
+    open-pull-requests-limit: 0
     groups:
       npm-minor-patch:
         update-types:
@@ -21,7 +24,10 @@ updates:
       day: monday
       time: "03:30"
       timezone: Asia/Jakarta
-    open-pull-requests-limit: 10
+    # Temporarily pause routine version-update PRs while Wirebound v1.2.0 is stabilized.
+    # Dependabot security update PRs use a separate limit and remain enabled.
+    # Restore to 10 after the release stabilization work is complete.
+    open-pull-requests-limit: 0
     groups:
       actions-minor-patch:
         update-types:
