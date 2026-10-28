@@ -167,4 +167,73 @@ describe('AdbService runtime scenarios', () => {
       expect.anything()
     )
   })
+
+  it('counts only successful Gnirehtet force-stop commands and masks failures', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const devices = [
+        { id: 'SYNTHETIC-A1', name: 'Fake phone A', status: 'device' as const },
+        { id: 'SYNTHETIC-B2', name: 'Fake phone B', status: 'device' as const }
+      ]
+      const executor = vi.fn(async (args: string[]): Promise<string> => {
+        const command = args.join(' ')
+        if (command.includes('shell am force-stop')) {
+          if (args[1] === 'SYNTHETIC-B2') {
+            throw new Error('ADB transport failed for SYNTHETIC-B2')
+          }
+          return ''
+        }
+        if (command === '-s SYNTHETIC-A1 reverse --list') {
+          throw new Error('reverse query failed for SYNTHETIC-A1')
+        }
+        if (command === '-s SYNTHETIC-B2 reverse --list') return ''
+        throw new Error('Unexpected synthetic ADB command')
+      })
+      const service = new AdbService(paths, executor)
+      vi.spyOn(service, 'getSnapshot').mockResolvedValue({ devices })
+      vi.spyOn(service, 'getActiveGnirehtetClients').mockResolvedValue(devices)
+
+      await expect(service.stopAllClients()).resolves.toBe(1)
+      expect(executor).toHaveBeenCalledWith(
+        ['-s', 'SYNTHETIC-A1', 'shell', 'am', 'force-stop', 'com.genymobile.gnirehtet'], 5000
+      )
+      expect(executor).toHaveBeenCalledWith(
+        ['-s', 'SYNTHETIC-B2', 'shell', 'am', 'force-stop', 'com.genymobile.gnirehtet'], 5000
+      )
+      expect(executor).not.toHaveBeenCalledWith(
+        expect.arrayContaining(['--remove-all']), expect.anything()
+      )
+      const warnings = warn.mock.calls.map((args) => args.map(String).join(' ')).join('\n')
+      expect(warnings).not.toContain('SYNTHETIC-A1')
+      expect(warnings).not.toContain('SYNTHETIC-B2')
+      expect(warnings).toContain('SY...A1')
+      expect(warnings).toContain('SY...B2')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('redacts serials from device-detail ADB errors without losing the device row', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const executor = vi.fn(async (args: string[]): Promise<string> => {
+        if (args.join(' ') === 'devices') {
+          return 'List of devices attached\nSYNTHETIC-A1\tdevice\n'
+        }
+        throw new Error('ADB detail query failed for SYNTHETIC-A1')
+      })
+      const service = new AdbService(paths, executor)
+      vi.spyOn(service, 'ensureServerReady').mockResolvedValue()
+
+      await expect(service.getSnapshot()).resolves.toEqual({
+        devices: [{ id: 'SYNTHETIC-A1', status: 'device', name: 'Android Device' }]
+      })
+      const warnings = warn.mock.calls.map((args) => args.map(String).join(' ')).join('\n')
+      expect(warnings).not.toContain('SYNTHETIC-A1')
+      expect(warnings).toContain('SY...A1')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
 })

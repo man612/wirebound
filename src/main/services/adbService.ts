@@ -130,6 +130,12 @@ export function maskDeviceId(deviceId: string): string {
   return `${value.slice(0, 2)}...${value.slice(-2)}`
 }
 
+/** Show a device-specific ADB error without exposing that device's raw identifier. */
+function safeDeviceError(error: unknown, deviceId: string): string {
+  const message = readableError(error, 'ADB operation failed.')
+  return deviceId ? message.split(deviceId).join(maskDeviceId(deviceId)) : message
+}
+
 export function classifyDeviceAccess(devices: AdbDevice[]): DiagnosticStatus {
   if (devices.some((device) => device.status === 'device')) return 'pass'
   if (
@@ -429,7 +435,9 @@ export class AdbService {
     }
 
     const activeDevices = await this.getActiveGnirehtetClients(snapshot.devices)
-    await Promise.all(activeDevices.map((device) => this.stopClient(device.id)))
+    // A previously active VPN is not proof that its force-stop command succeeded.
+    // Return successful ADB commands, not just the number of detected clients.
+    const stopResults = await Promise.all(activeDevices.map((device) => this.stopClient(device.id)))
 
     // Stale Gnirehtet reverse forwarding can outlive the Android VPN client.
     // Check each authorized phone, even when its VPN was already stopped.
@@ -439,11 +447,14 @@ export class AdbService {
         try {
           await this.cleanupGnirehtetReverse(device.id)
         } catch (error) {
-          console.warn('Wirebound: Could not clear Gnirehtet reverse tunnel.', error)
+          console.warn(
+            `Wirebound: Could not clear Gnirehtet reverse tunnel for ${maskDeviceId(device.id)}.`,
+            safeDeviceError(error, device.id)
+          )
         }
       })
     )
-    return activeDevices.length
+    return stopResults.filter(Boolean).length
   }
 
   public async getActiveGnirehtetClients(devices?: AdbDevice[]): Promise<AdbDevice[]> {
@@ -525,16 +536,24 @@ export class AdbService {
 
       return details
     } catch (error) {
-      console.warn(`Wirebound: Failed to read details for ${deviceId}.`, error)
+      console.warn(
+        `Wirebound: Failed to read details for ${maskDeviceId(deviceId)}.`,
+        safeDeviceError(error, deviceId)
+      )
       return { name: 'Android Device' }
     }
   }
 
-  private async stopClient(deviceId: string): Promise<void> {
+  private async stopClient(deviceId: string): Promise<boolean> {
     try {
       await this.execAdb(['-s', deviceId, 'shell', 'am', 'force-stop', GNIREHTET_PACKAGE], 5000)
+      return true
     } catch (error) {
-      console.warn(`Wirebound: Failed to stop gnirehtet client on ${deviceId}.`, error)
+      console.warn(
+        `Wirebound: Failed to stop Gnirehtet client on ${maskDeviceId(deviceId)}.`,
+        safeDeviceError(error, deviceId)
+      )
+      return false
     }
   }
 
