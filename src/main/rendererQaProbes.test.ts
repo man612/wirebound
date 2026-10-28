@@ -8,7 +8,7 @@ afterEach(() => {
 describe('bounded QA renderer probes', () => {
   it('always keeps the full two-second probe even when the early UI is ready', async () => {
     vi.useFakeTimers()
-    const probe = vi.fn(async (_event: string) => true)
+    const probe = vi.fn(async (event: string) => event.length > 0)
     const cancel = scheduleRendererQaProbes(probe)
     await vi.advanceTimersByTimeAsync(46000)
     expect(probe.mock.calls.map(([event]) => event)).toEqual([
