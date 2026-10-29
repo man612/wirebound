@@ -75,3 +75,13 @@ jobs:
           if ($unexpected) {
             throw "Unexpected Electron locales were packaged: $($unexpected -join ', ')"
           }
+
+      - name: Upload QA Windows unpacked app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-pr63-win-unpacked
+          path: dist/win-unpacked/
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 6
