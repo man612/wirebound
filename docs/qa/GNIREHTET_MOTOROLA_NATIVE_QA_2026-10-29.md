@@ -1,6 +1,6 @@
 # Native Gnirehtet / Motorola hardware QA — 2026-10-29
 
-**Status:** isolated Gnirehtet Rust 2.5.1 **native VPN launch confirmed**, but direct internet transfer and **exact PR #63 Electron Stop/Retry NOT YET tested**. This is a checkpoint on the Draft integration branch, **not merge or release approval**.
+**Status:** isolated Gnirehtet Rust 2.5.1 **native VPN, Android HTTPS and TUN RX/TX confirmed**, but **exact PR #63 Electron Start/Stop/Retry NOT YET tested**. This is a checkpoint on the Draft integration branch, **not merge or release approval**.
 
 ## Identity and isolation
 
@@ -37,9 +37,19 @@ With one authorized device, no existing Gnirehtet app process, no prior `localab
 | Logcat `Relay tunnel connected` | **PASS** |
 | Filtered logcat collection | 11 lines observed, 0 collection errors |
 | Rust native log categories | checking client APK, starting client, starting relay server; no stderr chunks |
-| Actual HTTPS transfer from phone and tunnel TUN RX/TX | **NOT YET TESTED** |
+| Actual HTTPS transfer from phone and tunnel TUN RX/TX | **PASS in follow-up native run: HTTPS 200, both VPN tun RX/TX counters increased** |
 
 **No new VPN authorization prompt is expected**: the maintainer saw Gnirehtet registered but disconnected in Android VPN settings, and `adb shell cmd appops get com.genymobile.gnirehtet ACTIVATE_VPN` returned **`allow`**. The GnirehtetActivity source bypasses the prompt if `VpnService.prepare()` returns `null`.
+
+## Second native run: actual Android HTTPS and VPN tunnel bytes — PASS
+
+A second bounded test used `F:\\Wirebound-Lab\\qa-tools\\gnirehtet-single-device-traffic-20261029.cjs`, a validated copy of the single-device, isolated-port runner. It invoked `gnirehtet run -d 8.8.8.8 -p 31416` with **one authorized handset** and ADB server **15379** (default ADB **5037** was not in use). Startup results again showed native relay listener, active Android Gnirehtet process, the intended ADB reverse mapping, and Android VPN transport. Concurrent filtered logcat observed **START activity, START_VPN service, previously authorized VPN, relay tunnel connected**.
+
+While the VPN and reverse mapping were active, ADB invoked **Android's own `/system/bin/curl`** with a bounded TLS request to the public test domain `https://example.com`, suppressing the response body and printing only the HTTP status. **The command succeeded and returned HTTP 200**. From Android `/proc/net/dev`, the runner compared `tun*` receive/transmit byte counters **before and after the HTTPS probe**: counters were readable, and **both RX and TX increased**. The tool displayed **only booleans and HTTP status**, not private IPs, raw interface statistics, serial numbers, URL response text or packet contents.
+
+The native CLI Stop succeeded. Its Android process lingered briefly after Stop, so the same **only-package-specific** `am force-stop com.genymobile.gnirehtet` cleanup was used. A Gnirehtet reverse mapping was still seen at the immediate post-Stop sample; the runner removed **only `localabstract:gnirehtet`**, without `adb reverse --remove-all` or touching other ADB mappings.
+
+A separate, subsequent read-only verification found: **zero Windows Wirebound/ADB/Gnirehtet processes**, listeners on **5037/15379/31416 all closed**, **one Android device still authorized**, **no Android Gnirehtet process**, **no Gnirehtet reverse mapping**, **no VPN transport**. The temporary QA ADB server was explicitly stopped. This is a completed, clean **native-path internet traffic QA**, **not** a pass for Wirebound PR #63's own engine or UI lifecycle.
 
 ## Stop/cleanup boundary (NOT a pass for PR #63)
 
@@ -50,7 +60,7 @@ With one authorized device, no existing Gnirehtet app process, no prior `localab
 
 ## Remaining gates
 
-1. Test actual phone HTTPS/TCP transfer while the native Gnirehtet VPN is active, preferably correlating VPN `tun*` RX/TX counters if Android permits; an open relay alone does not prove routed internet access.
+1. **COMPLETED on isolated native Gnirehtet pathway:** actual Android HTTPS TCP transfer returned HTTP 200 during a live VPN session; both `tun*` RX/TX counters increased. This does not establish throughput, DNS configuration correctness for every network, or the exact Electron PR #63 runtime.
 2. Build/start the **exact head of Draft PR #63** on the authorized Windows host in a **separate QA checkout and Electron profile**. Do not reuse or overwrite the old PR #51 checkout; it has a special `node_modules` junction described in `F:\Wirebound-Lab\qa-pr-blockers-20261028\QA_STATUS_2026-10-28.md`. Do not recursively clean through that junction.
 3. Exercise engine Start/Stop, selected-device connect/disconnect, Retry, process close delays, ADB reverse scope and UI state using the actual app under appropriately controlled default ADB **5037**, with only the single authorized test phone and no other competing ADB client.
 4. Check app log privacy with **synthetic identifiers**; do not export raw native logs or real ADB serials in GitHub comments.
