@@ -1,5 +1,6 @@
 import {
   app,
+  clipboard,
   dialog,
   ipcMain,
   shell,
@@ -242,6 +243,22 @@ export function registerIpcHandlers({
   ipcMain.handle('app:export-support-report', (event, content: unknown) => {
     trusted(event)
     return saveSupportReport(content, getMainWindow)
+  })
+
+  ipcMain.handle('app:copy-support-report', async (event, content: unknown): Promise<ActionResult> => {
+    trusted(event)
+    if (typeof content !== 'string' || !content || content.length > 100_000) {
+      return { success: false, error: 'Support report content is invalid.' }
+    }
+    try {
+      await clipboard.writeText(content)
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to copy support report.'
+      }
+    }
   })
 
   ipcMain.handle('app:open-external', (event, url: unknown) => {

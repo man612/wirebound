@@ -45,7 +45,20 @@ export const translations = {
     runDiagnostics: 'Run Diagnostics',
     rerunDiagnostics: 'Run Again',
     copyReport: 'Copy Report',
+    copyReportHelp: 'Copy a masked troubleshooting report for support.',
     reportCopied: 'Copied',
+    copyingReport: 'Copying...',
+    reportCopySuccess: 'Report copied to clipboard',
+    reportCopyFailed: 'Could not copy report. Try again.',
+    diagnosticsShow: 'Show diagnostics',
+    diagnosticsHide: 'Hide diagnostics',
+    diagnosticsChecking: 'Checking...',
+    diagnosticsFinished: 'Checks complete',
+    diagnosticsIssues: 'Some checks need attention',
+    diagnosticsFailed: 'Checks could not be completed',
+    diagnosticsPassed: 'passed',
+    dismissNotice: 'Dismiss notice',
+    noLogsToClear: 'Nothing to clear',
     exportReport: 'Export Report',
     reportExported: 'Exported',
     diagnosticsIdle:
@@ -63,7 +76,7 @@ export const translations = {
     yes: 'Yes',
     no: 'No',
     setupReadyTitle: 'Device ready',
-    setupReadyDesc: 'Start the connection, then accept the VPN prompt on the Android device.',
+    setupReadyDesc: 'Start the connection and approve VPN access on Android.',
     setupConnectedTitle: 'Relay and Android VPN are active',
     setupConnectedDesc:
       'Use the speed test to verify that internet access is actually working on the device.',
@@ -142,6 +155,7 @@ export const translations = {
     disconnectDevice: 'Disconnect',
     retryDevice: 'Retry',
     deviceActionWorking: 'Working...',
+    deviceActionFailed: 'Could not change this device connection. Please try again.',
     multiDeviceControlNote:
       'Per-device disconnect stays in effect while the device remains attached. Autorun may start it again after the device reconnects.',
 
@@ -156,7 +170,9 @@ export const translations = {
     updateAvailable: 'Update available:',
     upToDate: 'Wirebound is up to date',
     updateCheckFailed: 'Could not check for updates',
-    viewRelease: 'View Release'
+    viewRelease: 'View Release',
+    lastUpdateChecked: 'Last checked',
+    lastUpdateAttempt: 'Last attempt'
   },
   id: {
     welcome: 'Selamat Datang di Wirebound',
@@ -203,7 +219,20 @@ export const translations = {
     runDiagnostics: 'Jalankan Diagnostik',
     rerunDiagnostics: 'Jalankan Lagi',
     copyReport: 'Salin Laporan',
+    copyReportHelp: 'Salin laporan diagnostik dengan ID tersamarkan untuk bantuan teknis.',
     reportCopied: 'Tersalin',
+    copyingReport: 'Menyalin...',
+    reportCopySuccess: 'Laporan berhasil disalin',
+    reportCopyFailed: 'Gagal menyalin laporan. Coba lagi.',
+    diagnosticsShow: 'Lihat diagnostik',
+    diagnosticsHide: 'Sembunyikan diagnostik',
+    diagnosticsChecking: 'Memeriksa...',
+    diagnosticsFinished: 'Pemeriksaan selesai',
+    diagnosticsIssues: 'Beberapa pemeriksaan perlu ditangani',
+    diagnosticsFailed: 'Pemeriksaan gagal diselesaikan',
+    diagnosticsPassed: 'siap',
+    dismissNotice: 'Tutup pemberitahuan',
+    noLogsToClear: 'Belum ada log untuk dibersihkan',
     exportReport: 'Ekspor Laporan',
     reportExported: 'Diekspor',
     diagnosticsIdle:
@@ -221,7 +250,7 @@ export const translations = {
     yes: 'Ya',
     no: 'Tidak',
     setupReadyTitle: 'Perangkat siap',
-    setupReadyDesc: 'Mulai koneksi, lalu terima prompt VPN Gnirehtet di perangkat Android.',
+    setupReadyDesc: 'Mulai koneksi lalu setujui VPN di Android.',
     setupConnectedTitle: 'Relay dan VPN Android aktif',
     setupConnectedDesc:
       'Gunakan tes kecepatan untuk memastikan akses internet benar-benar bekerja di perangkat.',
@@ -299,6 +328,7 @@ export const translations = {
     disconnectDevice: 'Putuskan',
     retryDevice: 'Coba Lagi',
     deviceActionWorking: 'Memproses...',
+    deviceActionFailed: 'Gagal mengubah koneksi perangkat ini. Coba lagi.',
     multiDeviceControlNote:
       'Putus per perangkat tetap berlaku selama HP masih terpasang. Autorun dapat menyalakannya lagi setelah HP dicabut lalu disambungkan kembali.',
 
@@ -313,7 +343,9 @@ export const translations = {
     updateAvailable: 'Pembaruan tersedia:',
     upToDate: 'Wirebound sudah versi terbaru',
     updateCheckFailed: 'Tidak bisa memeriksa pembaruan',
-    viewRelease: 'Lihat Rilis'
+    viewRelease: 'Lihat Rilis',
+    lastUpdateChecked: 'Terakhir diperiksa',
+    lastUpdateAttempt: 'Percobaan terakhir'
   }
 }
 

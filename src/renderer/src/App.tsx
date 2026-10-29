@@ -45,12 +45,12 @@ function App(): React.JSX.Element {
   }
 
   useEffect(() => {
-    if (loaded && settings?.theme) {
+    if (loaded && settings?.theme && settings.onboardingCompleted) {
       const theme = settings.theme
       document.documentElement.setAttribute('data-theme', theme)
       document.documentElement.classList.toggle('dark', theme === 'dark')
     }
-  }, [loaded, settings?.theme])
+  }, [loaded, settings?.theme, settings.onboardingCompleted])
 
   if (!loaded) return <div className="h-screen w-screen bg-bg-primary" />
 
@@ -84,6 +84,7 @@ function App(): React.JSX.Element {
                   onClearLogs={clearLogs}
                   diagnostics={diagnostics}
                   t={t}
+                  language={settings.language}
                 />
               )}
               {activePage === 'settings' && (

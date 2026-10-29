@@ -68,3 +68,16 @@ Read [docs/CI_LOCAL_VALIDATION.md](docs/CI_LOCAL_VALIDATION.md) before interpret
 - Local app renderer/diagnostic access was **sometimes very slow** (initial read-only inspection ~115.55s; later read-only poll ~71.65s); do **not** conflate those test wall-clock durations with a measured time-to-window. **Startup issue #44 remains open and separate.**
 - No actual **human UI button clicks**, tray Quit, USB pull while connected, native 2-second shutdown timeout, or physical per-device `startDevice` Stop overlap was exercised. One physical phone only; this does **not** justify blanket multi-device claims. Keep PR #63 **Draft/unmerged** until explicit merge approval and remaining release gates are considered.
 - A separate final host check verified **0 Wirebound/Gnirehtet/ADB processes** and ports **5037/15379/31416/19665 closed**. The QA app is unpacked and unsigned, on F:, with isolated `APPDATA`/`LOCALAPPDATA`/`--user-data-dir`; do not touch ordinary user profile. The local source checkout's `node_modules` still points to D: via a junction: never recurse-delete it.
+
+## PR #50 UX integration references (preserved from UX branch)
+
+## PR #50 UX offline follow-up — 2026-10-24
+
+- Before continuing ten-item UX review in [Draft PR #50](https://github.com/man612/wirebound/pull/50), read [the verified/untested source audit](docs/qa/UX_OFFLINE_SOURCE_AUDIT_2026-10-24.md), [historical Chromium-mock matrix](docs/qa/UX_INTERACTIVE_QA_2026-10-21.md), and issue #48. Current branch source and evidence take precedence over dated notes or chatbot memory.
+- A source-confirmed diagnostic disclosure bug was corrected on PR #50: a successfully completed scan **may contain failed checks** and must not automatically hide them. The helper/unit fixture and mock Chromium scenario were added while Windows was offline. Focused isolated logic checks passed; **native Vitest/Chromium/browser/NSIS/real USB tests for the new commits are NOT yet run**. Never inherit the earlier 52/52 or 18/18 evidence as proof for newer commits.
+- The maintainer plans to reopen the Windows computer around Tuesday 2026-10-27 09:00 WIB; device availability is not guaranteed. Do not poll repeatedly or touch the regular user installation. Keep UX #50 separate from startup #51 and Tauri #52. No merge/release/dependency modernization without explicit approval.
+
+## PR #50 + #51 integration safety
+
+- **Do not resolve shared-file merge conflicts by choosing one branch wholesale.** Read [the source-verified integration contract](docs/qa/PR50_PR51_INTEGRATION_CONTRACT_2026-10-24.md) before combining UX PR #50 and startup PR #51. Their overlap includes `src/main/ipc.ts`, `src/renderer/src/App.tsx`, and this `AGENTS.md`; both PRs are Draft, and no combined app/installer has passed testing.
+- Preserve startup's async service readiness / post-await sender validation alongside UX's Electron clipboard IPC. Preserve startup's React markers/lazy Settings alongside UX's onboarding theme preview and Dashboard `language` prop. Preserve both dated agent handoffs. Never treat individual PR mergeability as proof that sequential merge or combined runtime behavior is safe.

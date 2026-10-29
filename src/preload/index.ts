@@ -13,6 +13,7 @@ const api: GnirehtetAPI = {
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getDiagnostics: () => ipcRenderer.invoke('app:diagnostics'),
   exportSupportReport: (content: string) => ipcRenderer.invoke('app:export-support-report', content),
+  copySupportReport: (content: string) => ipcRenderer.invoke('app:copy-support-report', content),
   checkForUpdates: () => ipcRenderer.invoke('app:check-updates'),
   getCrashTelemetryState: () => ipcRenderer.invoke('app:crash-telemetry-state'),
   testSpeedOnDevice: (deviceId: string) => ipcRenderer.invoke('adb:testSpeed', deviceId),
