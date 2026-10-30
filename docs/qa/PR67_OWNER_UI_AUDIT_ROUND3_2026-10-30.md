@@ -29,3 +29,28 @@ This checkpoint responds to ten visual/interaction defects reported in five live
 3. Running service + Gnirehtet Android client state under the refreshed build, safe global Stop and per-device last/remaining device semantics. One phone only; two-device physical case remains waived.
 4. Native Save dialog export formats and negative/error flows.
 5. Maintain PR #67 as Draft until user reviews. No dependency upgrade.
+
+## Final QA handoff — actual compact build launched (supersedes staging-only status above)
+
+After the earlier active tethering session ended, read-only Windows/Android preflight explicitly confirmed `status=disconnected`, `autoStart=false`, one authorized Motorola, no Gnirehtet VPN and no Gnirehtet reverse mapping. Ownership guards stopped only five F:-owned prior-QA Wirebound processes and its one F:-owned ADB daemon (a previous race where a child exited before its targeted Stop command had been handled safely). The final compact QA package was **launched** as:
+
+- `F:\\Wirebound-Lab\\qa-packages\\ux-audit-round3b-20261030\\wirebound.exe`, main PID **2388** at launch
+- Completely separate QA userData at `F:\\Wirebound-Lab\\qa-profiles\\ux-audit-round3b-20261030`; `autoStart:false`, telemetry off, default dark
+- Localhost CDP port `19676`, no everyday installation change.
+
+**Independent Chromium real-DOM measurement after diagnostic and ready-notice automatic collapse:**
+
+| Element | Prior round3 QA | Final round3b QA |
+| --- | ---: | ---: |
+| Hidden diagnostic detail track | 0px | **0px** |
+| Hidden diagnostic feedback track | 0px | **0px** |
+| Hidden diagnostic progress track | **16px** | **0px** |
+| Dismissed ready notification track | **18px** | **0px** |
+| Total collapsed diagnostics card height | **71.5px** | **55.5px** |
+| Sidebar nav `scrollWidth/clientWidth` | 199/199 | **199/199** |
+
+The final package was genuinely running with engine `disconnected` during those measurements; values came from `getBoundingClientRect()` and computed grid rows, not screenshots or guessed CSS.
+
+Immediately before a proposed automated hover/click test, the user had resumed testing USB tethering and the final QA renderer was again `status=connected`. **The hover automation aborted without sending any pointer or click events**, so tooltip timing and user-initiated scroll-follow still require hands-on acceptance. No process, client, VPN, reverse mapping or relay was stopped or changed during that user's connected session.
+
+As previously verified on the predecessor round3 QA package, a real connected Moto session displayed **6/6 passed** in the diagnostics and the real global **Stop Connection** control. The final round3b source did not change diagnostic status logic or lifecycle; its changes were specifically to remove residual collapsed-space caused by direct CSS grid child margins/borders. Do not misrepresent this as a fresh physical HTTPS/TUN acceptance of final round3b.
