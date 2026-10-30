@@ -27,10 +27,10 @@ export function renderSafeLogLines(logs: LogEntry[], devices: AdbDevice[]): stri
 export default function TerminalLog({ logs, devices, onClear, t, language, full = false }: Props): React.JSX.Element {
   const id = language === 'id'
   const viewportRef = useRef<HTMLDivElement>(null)
-  const previousLengthRef = useRef(logs.length)
   const followRef = useRef(true)
   const [following, setFollowing] = useState(true)
-  const [unread, setUnread] = useState(0)
+  const [pausedAt, setPausedAt] = useState(logs.length)
+  const unread = following ? 0 : Math.max(0, logs.length - pausedAt)
   const [feedback, setFeedback] = useState<'copied' | 'exported' | 'error' | null>(null)
   const [filter, setFilter] = useState<'all' | 'errors'>('all')
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -39,17 +39,8 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
   const visibleLogs = filter === 'errors' ? logs.filter(x => x.type === 'stderr') : logs
 
   useEffect(() => {
-    if (logs.length === 0) {
-      previousLengthRef.current = 0
-      setUnread(0)
-      return
-    }
-    const appended = logs.length > previousLengthRef.current ? logs.length - previousLengthRef.current : 0
-    previousLengthRef.current = logs.length
-    if (followRef.current) {
-      if (viewportRef.current) viewportRef.current.scrollTop = viewportRef.current.scrollHeight
-    } else if (appended > 0) {
-      setUnread(n => n + appended)
+    if (followRef.current && viewportRef.current) {
+      viewportRef.current.scrollTop = viewportRef.current.scrollHeight
     }
   }, [logs])
 
@@ -66,7 +57,7 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
   const scrollLatest = (): void => {
     followRef.current = true
     setFollowing(true)
-    setUnread(0)
+    setPausedAt(logs.length)
     const viewport = viewportRef.current
     if (viewport) viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' })
   }
@@ -74,6 +65,7 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
   const toggleFollow = (): void => {
     if (followRef.current) {
       followRef.current = false
+      setPausedAt(logs.length)
       setFollowing(false)
     } else scrollLatest()
   }
@@ -84,6 +76,7 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
     if (!viewport) return
     if (viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight > 30) {
       followRef.current = false
+      setPausedAt(logs.length)
       setFollowing(false)
     }
   }
@@ -134,7 +127,7 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
           <button type="button" className="motion-control log-tool" onClick={() => void exportLogs()} disabled={!allText}
             title={id ? 'Ekspor log' : 'Export logs'}><Download size={12}/></button>
           <button type="button" className="motion-control log-tool hover:text-accent-red" disabled={logs.length === 0}
-            title={logs.length === 0 ? t.noLogsToClear : t.clear} onClick={onClear}><Trash2 size={12}/></button>
+            title={logs.length === 0 ? t.noLogsToClear : t.clear} onClick={() => { onClear(); setPausedAt(0) }}><Trash2 size={12}/></button>
         </div>
       </div>
       <div className="relative min-h-0">
