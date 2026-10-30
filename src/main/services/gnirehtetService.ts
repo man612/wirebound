@@ -224,7 +224,12 @@ export class GnirehtetService {
         this.emitSafeLog(`Could not remove Gnirehtet USB tunnel: ${readError(error, 'ADB error')}`, 'stderr')
       }
       this.emitSafeLog('Stopped tethering on the selected Android device.', 'info')
-      await this.syncStatusWithDeviceState()
+      const active = await this.syncStatusWithDeviceState()
+      // When the last VPN disconnects, tear down the otherwise idle autorun relay.
+      // A remaining device keeps the relay and the global Stop action available.
+      if (active.size === 0 && this.status !== 'error' && this.childProcess && !this.isStopping) {
+        return this.stop()
+      }
       return { success: true }
     } catch (error) {
       const message = readError(error, 'Failed to stop tethering on the selected device.')

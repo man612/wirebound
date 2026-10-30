@@ -13,6 +13,22 @@ const paths: RuntimePaths = {
 }
 
 describe('AdbService runtime scenarios', () => {
+  it('emits real completed diagnostic checkpoints and reaches six of six', async () => {
+    const commands = vi.fn(async (args: string[]) => {
+      if (args.join(' ') === 'version') return 'Android Debug Bridge version 1.0.41\nVersion 37.0.1'
+      throw new Error('Unexpected command')
+    })
+    const service = new AdbService({ ...paths, adbExe: process.execPath, gnirehtetExe: process.execPath }, commands)
+    vi.spyOn(service, 'getSnapshot').mockResolvedValue({ devices: [] })
+    const stages: number[] = []
+    const report = await service.getDiagnostics('disconnected', (completed, total) => {
+      expect(total).toBe(6)
+      stages.push(completed)
+    })
+    expect(report.checks.length).toBe(6)
+    expect(stages).toEqual([2, 3, 4, 5, 6])
+  })
+
   it('keeps an unauthorized device visible instead of treating it as no device', async () => {
     const executor = vi.fn(async (args: string[]): Promise<string> => {
       if (args.join(' ') === 'devices') {

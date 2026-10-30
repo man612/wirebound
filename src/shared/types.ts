@@ -97,6 +97,8 @@ export interface DiagnosticSystemInfo {
   arch: string
 }
 
+export interface DiagnosticProgress { completed: number; total: number }
+
 export interface DiagnosticReport {
   generatedAt: string
   engineStatus: ConnectionStatus
@@ -117,6 +119,7 @@ export interface GnirehtetAPI {
   saveSettings: (settings: AppSettings) => Promise<AppSettings>
   getAppVersion: () => Promise<string>
   getDiagnostics: () => Promise<DiagnosticReport>
+  onDiagnosticsProgress: (callback: (progress: DiagnosticProgress) => void) => () => void
   exportSupportReport: (content: string) => Promise<SaveReportResult>
   copySupportReport: (content: string) => Promise<ActionResult>
   checkForUpdates: () => Promise<UpdateCheckResult>

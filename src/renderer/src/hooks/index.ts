@@ -6,6 +6,7 @@ import type {
   AppSettings,
   ConnectionStatus,
   DiagnosticReport,
+  DiagnosticProgress,
   LogEntry
 } from '../../../shared/types'
 
@@ -33,6 +34,7 @@ interface UseDiagnosticsResult {
   report?: DiagnosticReport
   isRunning: boolean
   error?: string
+  progress: DiagnosticProgress
   run: () => Promise<void>
 }
 
@@ -201,7 +203,16 @@ export function useDiagnostics(): UseDiagnosticsResult {
   const [report, setReport] = useState<DiagnosticReport | undefined>()
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  const [progress, setProgress] = useState<DiagnosticProgress>({ completed: 0, total: 6 })
   const runInFlightRef = useRef(false)
+  useEffect(() => {
+    if (!hasApi()) return
+    return window.api.onDiagnosticsProgress((value) => {
+      if (Number.isInteger(value.completed) && Number.isInteger(value.total) && value.total === 6 && value.completed >= 0 && value.completed <= 6) {
+        setProgress(value)
+      }
+    })
+  }, [])
 
   const run = useCallback(async (): Promise<void> => {
     if (runInFlightRef.current) return
@@ -212,6 +223,7 @@ export function useDiagnostics(): UseDiagnosticsResult {
 
     runInFlightRef.current = true
     setIsRunning(true)
+    setProgress({ completed: 0, total: 6 })
     setError(undefined)
     // Do not present an older successful scan as the result of a failed rerun.
     setReport(undefined)
@@ -220,12 +232,13 @@ export function useDiagnostics(): UseDiagnosticsResult {
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : 'Diagnostics failed.')
     } finally {
+      setProgress({ completed: 6, total: 6 })
       runInFlightRef.current = false
       setIsRunning(false)
     }
   }, [])
 
-  return { report, isRunning, error, run }
+  return { report, isRunning, error, progress, run }
 }
 
 export function useAppVersion(): string {

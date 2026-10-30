@@ -1,10 +1,11 @@
 import {
   BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, BatteryCharging,
-  Battery as BatteryIcon, Link2, Unplug, Zap, Smartphone
+  Battery as BatteryIcon, Link2, Unplug, Gauge, Smartphone
 } from 'lucide-react'
 import type { AdbDevice, ConnectionStatus } from '../../../../shared/types'
 import type { Language, Translation } from '../../i18n'
 import { maskDeviceId } from '../../formatters'
+import Tooltip from '../ui/Tooltip'
 
 interface Props {
   device: AdbDevice
@@ -71,7 +72,7 @@ export default function DeviceRow({
   const battery = getBatteryPresentation(device.battery, device.batteryStatus, language)
   const connected = device.tunnelStatus === 'connected'
   const isDeviceReady = device.status === 'device'
-  const canAct = isDeviceReady && (engineStatus === 'connecting' || engineStatus === 'connected') && !busy
+  const canAct = isDeviceReady && engineStatus === 'connected' && !busy
   const batteryLabel = language === 'id' ? 'Baterai' : 'Battery'
   const subtitle = [
     device.androidVersion ? `Android ${device.androidVersion}` : undefined,
@@ -100,7 +101,7 @@ export default function DeviceRow({
             isDeviceReady ? 'text-accent-green' : 'text-accent-yellow'
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${isDeviceReady ? 'bg-accent-green' : 'bg-accent-yellow'}`}/>
-            ADB ${deviceStatusLabel(device, t)}
+            ADB {deviceStatusLabel(device, t)}
           </span>
           <div className={`text-[10px] ${connected ? 'text-accent-green' : 'text-text-muted'}`}>
             {connected ? t.tunnelConnected : device.tunnelStatus === 'waiting' ? t.tunnelWaiting : t.tunnelIdle}
@@ -122,13 +123,15 @@ export default function DeviceRow({
               connected ? 'border-accent-red/30 text-accent-red hover:bg-accent-red-dim/20' : 'border-accent-blue/30 text-accent-blue hover:bg-bg-hover'
             }`}>
             {connected ? <Unplug size={12}/> : <Link2 size={12}/>}
-            {busy ? t.deviceActionWorking : connected ? t.disconnectDevice : t.retryDevice}
+            {busy ? t.deviceActionWorking : connected ? t.disconnectDevice : language === 'id' ? 'Hubungkan' : 'Connect'}
           </button>
-          <button type="button" onClick={() => onSpeed(device.id)} disabled={!connected}
-            title={t.testDeviceSpeed} aria-label={t.testDeviceSpeed}
+          <Tooltip text={language === 'id' ? 'Tes kecepatan internet HP' : 'Test phone internet speed'}>
+          <button type="button" onClick={() => onSpeed(device.id)} disabled={!isDeviceReady}
+            aria-label={t.testDeviceSpeed}
             className="motion-control grid place-items-center rounded-md border border-border-subtle bg-bg-primary p-1.5 text-text-secondary hover:text-accent-blue disabled:opacity-40 disabled:cursor-not-allowed">
-            <Zap size={13}/>
+            <Gauge size={13}/>
           </button>
+          </Tooltip>
         </div>
       </div>
       {actionFailed && <p role="alert" className="motion-enter mt-1 text-[11px] text-accent-red">{t.deviceActionFailed}</p>}

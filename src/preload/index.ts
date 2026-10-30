@@ -12,6 +12,13 @@ const api: GnirehtetAPI = {
   saveSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getDiagnostics: () => ipcRenderer.invoke('app:diagnostics'),
+  onDiagnosticsProgress: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      callback(value as Parameters<typeof callback>[0])
+    }
+    ipcRenderer.on('app:diagnostics-progress', handler)
+    return () => ipcRenderer.removeListener('app:diagnostics-progress', handler)
+  },
   exportSupportReport: (content: string) => ipcRenderer.invoke('app:export-support-report', content),
   copySupportReport: (content: string) => ipcRenderer.invoke('app:copy-support-report', content),
   checkForUpdates: () => ipcRenderer.invoke('app:check-updates'),

@@ -283,7 +283,12 @@ export class AdbService {
     }
   }
 
-  public async getDiagnostics(engineStatus: ConnectionStatus): Promise<DiagnosticReport> {
+  public async getDiagnostics(
+    engineStatus: ConnectionStatus,
+    onProgress?: (completed: number, total: number) => void
+  ): Promise<DiagnosticReport> {
+    const total = 6
+    const progress = (completed: number): void => onProgress?.(completed, total)
     const checks: DiagnosticCheck[] = [
       {
         id: 'adbRuntime',
@@ -301,7 +306,9 @@ export class AdbService {
       }
     ]
 
+    progress(2)
     if (!existsSync(this.paths.adbExe)) {
+      progress(total)
       return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
     }
 
@@ -311,6 +318,7 @@ export class AdbService {
         .split(/\r?\n/)
         .map((line) => line.trim())
         .find((line) => line.startsWith('Version '))
+      progress(3)
       checks.push({
         id: 'adbQuery',
         status: 'pass',
@@ -322,14 +330,17 @@ export class AdbService {
         status: 'error',
         detail: readableError(error, 'ADB did not respond.')
       })
+      progress(total)
       return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
     }
 
     const snapshot = await this.getSnapshot()
     if (snapshot.error) {
       checks.push({ id: 'deviceAccess', status: 'error', detail: snapshot.error })
+      progress(total)
       return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
     }
+    progress(4)
 
     checks.push({
       id: 'deviceAccess',
@@ -345,6 +356,7 @@ export class AdbService {
     )
     const readyDevices = devices.filter((device) => device.status === 'device')
 
+    progress(5)
     checks.push({
       id: 'androidVersion',
       status: readyDevices.length > 0 ? 'pass' : 'info',
@@ -382,6 +394,7 @@ export class AdbService {
               : 'The Wirebound engine is stopped.'
     })
 
+    progress(total)
     return { generatedAt: new Date().toISOString(), engineStatus, checks, devices }
   }
 

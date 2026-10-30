@@ -132,6 +132,31 @@ describe('GnirehtetService lifecycle scenarios', () => {
     expect(adb.cleanupGnirehtetReverse).toHaveBeenCalledWith('ABC123')
   })
 
+  it('stops the desktop relay when the last VPN device is disconnected', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const commandRunner = vi.fn().mockResolvedValue('')
+    const { adb } = createAdbDouble()
+    const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true, commandRunner)
+    await service.start('8.8.8.8', '31416')
+    await expect(service.stopDevice('ABC123')).resolves.toEqual({ success: true })
+    expect(child.kill).toHaveBeenCalled()
+    expect(service.getStatus()).toBe('disconnected')
+  })
+
+  it('keeps the relay alive when another Android VPN client remains connected', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const commandRunner = vi.fn().mockResolvedValue('')
+    const { adb, getActiveGnirehtetClients } = createAdbDouble()
+    getActiveGnirehtetClients.mockResolvedValue([{ id: 'DEF456', name: 'Other phone', status: 'device' }])
+    const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true, commandRunner)
+    await service.start('8.8.8.8', '31416')
+    await expect(service.stopDevice('ABC123')).resolves.toEqual({ success: true })
+    expect(child.kill).not.toHaveBeenCalled()
+    expect(service.getStatus()).toBe('connected')
+  })
+
   it('rejects unsafe device identifiers before invoking Gnirehtet', async () => {
     const commandRunner = vi.fn().mockResolvedValue('')
     const { adb } = createAdbDouble()

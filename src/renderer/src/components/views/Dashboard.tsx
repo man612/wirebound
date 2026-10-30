@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardCopy,
-  ChevronDown,
   ChevronRight,
   X,
   Download,
@@ -28,6 +27,9 @@ import { formatUiTimestamp, maskDeviceId } from '../../formatters'
 import { hasFailedDiagnosticChecks } from './diagnosticsDisclosure'
 import DeviceRow from './DeviceRow'
 import TerminalLog from './TerminalLog'
+import ConfirmDialog from '../ui/ConfirmDialog'
+
+let dashboardHasMountedOnce = false
 
 interface DashboardProps {
   status: ConnectionStatus
@@ -42,6 +44,7 @@ interface DashboardProps {
     report?: DiagnosticReport
     isRunning: boolean
     error?: string
+    progress: { completed: number; total: number }
     run: () => Promise<void>
   }
   t: Translation
@@ -203,17 +206,28 @@ export default function Dashboard({
   const rerunLockRef = useRef(false)
   const acknowledgedRerunRef = useRef(0)
   const initialRevealScheduledRef = useRef(false)
-  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(true)
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(() => {
+    const initial = typeof window === 'undefined' || !dashboardHasMountedOnce
+    dashboardHasMountedOnce = true
+    return initial
+  })
   const [diagnosticsManuallyToggled, setDiagnosticsManuallyToggled] = useState(false)
   const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | 'issues' | null>(null)
   const [rerunCycle, setRerunCycle] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
   const [reportExported, setReportExported] = useState(false)
+  const [speedWarningDevice, setSpeedWarningDevice] = useState<string | null>(null)
+  const [progressBarVisible, setProgressBarVisible] = useState(false)
+  const [feedbackExiting, setFeedbackExiting] = useState(false)
+  const progressHideTimerRef = useRef<number | null>(null)
+  const messageTimerRef = useRef<number | null>(null)
   const deviceActionLockRef = useRef<Set<string>>(new Set())
   const [deviceActionIds, setDeviceActionIds] = useState<Set<string>>(() => new Set())
   const [deviceActionErrors, setDeviceActionErrors] = useState<Record<string, boolean>>({})
   const [readyDismissed, setReadyDismissed] = useState(false)
   const hasFailedChecks = hasFailedDiagnosticChecks(diagnostics.report)
+  const progressPercent = diagnostics.progress.total > 0
+    ? Math.round(100 * diagnostics.progress.completed / diagnostics.progress.total) : 0
   const diagnosticsVisible =
     diagnosticsExpanded || (Boolean(diagnostics.error) && !diagnosticsManuallyToggled)
 
@@ -248,6 +262,8 @@ export default function Dashboard({
   useEffect(() => () => {
     if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
+    if (progressHideTimerRef.current !== null) window.clearTimeout(progressHideTimerRef.current)
+    if (messageTimerRef.current !== null) window.clearTimeout(messageTimerRef.current)
   }, [])
 
   useEffect(() => {
@@ -263,6 +279,14 @@ export default function Dashboard({
     acknowledgedRerunRef.current = rerunCycle
     const failed = Boolean(diagnostics.error)
     setDiagnosticsFeedback(failed ? 'failed' : hasFailedChecks ? 'issues' : 'finished')
+    setFeedbackExiting(false)
+    if (progressHideTimerRef.current !== null) window.clearTimeout(progressHideTimerRef.current)
+    progressHideTimerRef.current = window.setTimeout(() => setProgressBarVisible(false), 900)
+    if (messageTimerRef.current !== null) window.clearTimeout(messageTimerRef.current)
+    messageTimerRef.current = window.setTimeout(() => {
+      setFeedbackExiting(true)
+      messageTimerRef.current = window.setTimeout(() => setDiagnosticsFeedback(null), 300)
+    }, 2200)
     if (!failed && !hasFailedChecks && !manuallyToggledRef.current) {
       if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
       collapseTimerRef.current = window.setTimeout(() => {
@@ -289,6 +313,10 @@ export default function Dashboard({
     collapseTimerRef.current = null
     setDiagnosticsExpanded(true)
     setDiagnosticsFeedback('running')
+    setFeedbackExiting(false)
+    if (progressHideTimerRef.current !== null) window.clearTimeout(progressHideTimerRef.current)
+    if (messageTimerRef.current !== null) window.clearTimeout(messageTimerRef.current)
+    setProgressBarVisible(true)
     try {
       await diagnostics.run()
     } finally {
@@ -359,10 +387,17 @@ export default function Dashboard({
     }
   }
 
-  const handleOpenDeviceSpeedTest = (deviceId: string): void => {
+  const launchDeviceSpeedTest = (deviceId: string): void => {
     void window.api.testSpeedOnDevice(deviceId).then((result) => {
       if (!result.success) console.warn('Failed to open speed test on device.', result.error)
     })
+  }
+  const handleOpenDeviceSpeedTest = (deviceId: string): void => {
+    const device = devices.find((item) => item.id === deviceId)
+    if (!device || device.status !== 'device') return
+    if (device.tunnelStatus !== 'connected') {
+      setSpeedWarningDevice(deviceId)
+    } else launchDeviceSpeedTest(deviceId)
   }
 
   return (
@@ -441,7 +476,9 @@ export default function Dashboard({
           </div>
         </div>
 
-        {(!readyDismissed || setupState.tone !== 'ready') && <div
+        <div className={`notice-fold ${!readyDismissed || setupState.tone !== 'ready' ? 'notice-fold-open' : ''}`}
+          aria-hidden={readyDismissed && setupState.tone === 'ready'} inert={readyDismissed && setupState.tone === 'ready'}>
+        <div
           className={`flex items-center gap-2 rounded-sm border px-3 py-2 theme-transition ${
             setupState.tone === 'active' || setupState.tone === 'ready'
               ? 'border-accent-green/30 bg-accent-green-dim/40 dark:bg-accent-green-dim/20'
@@ -474,7 +511,8 @@ export default function Dashboard({
               <X size={14} />
             </button>
           )}
-        </div>}
+        </div>
+        </div>
 
         <div className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
           <div className="flex items-center justify-between gap-3">
@@ -494,18 +532,19 @@ export default function Dashboard({
                 onClick={() => void handleCopyDiagnostics()}
                 disabled={!diagnostics.report || copyState === 'copying'}
                 title={t.copyReportHelp}
-                className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+                className="motion-control relative inline-flex h-7 w-[112px] items-center justify-center rounded-md border border-border-subtle bg-bg-primary px-1.5 text-[10px] font-medium text-text-secondary hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {copyState === 'success' ? <CheckCircle2 size={12} /> : <ClipboardCopy size={12} />}
-                {copyState === 'copying' ? t.copyingReport : copyState === 'success' ? t.reportCopied : t.copyReport}
+                <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${copyState === 'idle' || copyState === 'error' ? 'motion-label-visible' : ''}`}><ClipboardCopy size={12} />{t.copyReport}</span>
+                <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${copyState === 'copying' ? 'motion-label-visible' : ''}`}><RefreshCw size={12} className="animate-spin" />{t.copyingReport}</span>
+                <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${copyState === 'success' ? 'motion-label-visible' : ''}`}><CheckCircle2 size={12}/>{t.reportCopied}</span>
               </button>
               <button
                 onClick={() => void handleExportDiagnostics()}
                 disabled={!diagnostics.report}
-                className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-text-secondary transition-colors hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+                className="motion-control relative inline-flex h-7 w-[110px] items-center justify-center rounded-md border border-border-subtle bg-bg-primary px-1.5 text-[10px] font-medium text-text-secondary hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Download size={12} />
-                {reportExported ? t.reportExported : t.exportReport}
+                <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${!reportExported ? 'motion-label-visible' : ''}`}><Download size={12}/>{t.exportReport}</span>
+                <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${reportExported ? 'motion-label-visible' : ''}`}><CheckCircle2 size={12}/>{t.reportExported}</span>
               </button>
               <button
                 onClick={() => void handleRerunDiagnostics()}
@@ -517,33 +556,44 @@ export default function Dashboard({
               </button>
               <button type="button" onClick={handleToggleDiagnostics}
                 aria-expanded={diagnosticsVisible} aria-controls="wirebound-diagnostic-details"
-                className="inline-flex items-center gap-1 rounded-sm border border-border-subtle bg-bg-primary px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
-                {diagnosticsVisible ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                className="motion-control inline-flex h-7 w-[132px] items-center justify-center gap-1 rounded-md border border-border-subtle bg-bg-primary px-2 text-[10px] font-medium text-text-secondary hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
+                <ChevronRight size={13} className={`transition-transform duration-200 ${diagnosticsVisible ? 'rotate-90' : ''}`} />
                 {diagnosticsVisible ? t.diagnosticsHide : t.diagnosticsShow}
               </button>
             </div>
           </div>
 
-          <div role="status" aria-live="polite" aria-atomic="true" className="mt-1 text-[11px] text-text-secondary">
+          <div role="status" aria-live="polite" aria-atomic="true" className="min-h-[18px] text-[11px] text-text-secondary">
             {diagnostics.isRunning || diagnosticsFeedback === 'running' ? (
-              <span className="inline-flex items-center gap-1.5 text-accent-blue">
+              <span className="motion-feedback motion-feedback-visible inline-flex items-center gap-1.5 text-accent-blue">
                 <RefreshCw size={12} className="motion-safe:animate-spin" /> {t.diagnosticsChecking}
               </span>
-            ) : diagnosticsFeedback === 'finished' ? t.diagnosticsFinished
-              : diagnosticsFeedback === 'issues' ? t.diagnosticsIssues
-                : diagnosticsFeedback === 'failed' ? t.diagnosticsFailed : null}
-            {copyState === 'success' && (
-              <span className="ml-2 inline-flex items-center gap-1 text-accent-green"><CheckCircle2 size={12} />{t.reportCopySuccess}</span>
+            ) : (
+              <span className={`motion-feedback ${diagnosticsFeedback && !feedbackExiting ? 'motion-feedback-visible' : ''}`}>
+                {diagnosticsFeedback === 'finished' ? t.diagnosticsFinished
+                  : diagnosticsFeedback === 'issues' ? t.diagnosticsIssues
+                    : diagnosticsFeedback === 'failed' ? t.diagnosticsFailed : ''}
+              </span>
             )}
+            <span className={`motion-feedback ml-2 inline-flex items-center gap-1 text-accent-green ${copyState === 'success' ? 'motion-feedback-visible' : ''}`} aria-hidden={copyState !== 'success'}>
+              <CheckCircle2 size={12} />{t.reportCopySuccess}
+            </span>
             {copyState === 'error' && (
               <span className="ml-2 text-accent-red">{t.reportCopyFailed}</span>
             )}
           </div>
-          {diagnostics.isRunning && (
-            <div aria-hidden="true" className="mt-2 h-0.5 overflow-hidden rounded-sm bg-bg-primary">
-              <div className="h-full w-1/3 bg-accent-blue motion-safe:animate-shimmer" />
+          <div className={`diagnostic-progress-shell ${diagnostics.isRunning || progressBarVisible ? 'diagnostic-progress-open' : ''}`}
+            aria-hidden={!(diagnostics.isRunning || progressBarVisible)}>
+            <div className="my-2 flex items-center gap-3">
+              <div role="progressbar" aria-label={language === 'id' ? 'Progres diagnostik' : 'Diagnostic progress'}
+                aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}
+                className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg-hover">
+                <div className="diagnostic-progress-fill h-full rounded-full bg-accent-blue"
+                  style={{ width: `${progressPercent}%` }}/>
+              </div>
+              <span className="w-9 text-right font-mono text-[10px] tabular-nums text-accent-blue">{progressPercent}%</span>
             </div>
-          )}
+          </div>
           <div id="wirebound-diagnostic-details" className={"diagnostics-fold " + (diagnosticsVisible ? "diagnostics-fold-open" : "")}
             inert={!diagnosticsVisible} aria-hidden={!diagnosticsVisible}>
             <div className="diagnostics-fold-content">
@@ -648,6 +698,15 @@ export default function Dashboard({
           <TerminalLog logs={logs} devices={devices} onClear={onClearLogs} t={t} language={language}/>
         </div>
       </div>
+      <ConfirmDialog open={speedWarningDevice !== null}
+        title={language === 'id' ? 'Tes kecepatan internet HP?' : 'Test the phone internet speed?'}
+        message={language === 'id'
+          ? 'HP belum tersambung melalui Wirebound. Fast.com akan memakai jaringan HP yang aktif, termasuk data seluler jika digunakan. Tes ini dapat menghabiskan kuota.'
+          : 'This phone is not using the Wirebound tunnel. Fast.com will use its current network, including mobile data if enabled, and can consume your data allowance.'}
+        cancelLabel={language === 'id' ? 'Batal' : 'Cancel'}
+        confirmLabel={language === 'id' ? 'Lanjut tes' : 'Continue test'}
+        onCancel={() => setSpeedWarningDevice(null)}
+        onConfirm={() => { if (speedWarningDevice) launchDeviceSpeedTest(speedWarningDevice); setSpeedWarningDevice(null) }}/>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import TitleBar from './components/layout/TitleBar'
 import Sidebar from './components/layout/Sidebar'
 import OnboardingScreen from './components/OnboardingScreen'
@@ -19,6 +20,13 @@ function App(): React.JSX.Element {
   const diagnostics = useDiagnostics()
   const version = useAppVersion()
   const t = translations[(settings?.language as Language) || 'en']
+
+  const navigate = (next: AppPage): void => {
+    if (next === activePage) return
+    if ('startViewTransition' in document) {
+      document.startViewTransition(() => flushSync(() => setActivePage(next)))
+    } else setActivePage(next)
+  }
 
   const handleStart = async (): Promise<void> => {
     const dns = settings.dns === 'custom' ? settings.customDns : settings.dns
@@ -72,7 +80,7 @@ function App(): React.JSX.Element {
 
       {settings.onboardingCompleted && (
         <>
-          <Sidebar activePage={activePage} onNavigate={setActivePage} t={t} language={settings.language} version={version} />
+          <Sidebar activePage={activePage} onNavigate={navigate} t={t} language={settings.language} version={version} />
           <main className="flex-grow relative overflow-hidden bg-bg-surface pt-8 theme-transition">
             <div key={activePage} className="h-full">
               {activePage === 'dashboard' && (

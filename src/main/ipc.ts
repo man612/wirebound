@@ -11,6 +11,7 @@ import {
 import { writeFile } from 'fs/promises'
 import { release } from 'os'
 import { join } from 'path'
+import { formatSupportContent, parseReportFormat } from './services/reportFormats'
 import type { ActionResult, AdbSnapshot, AppSettings, SaveReportResult } from '../shared/types'
 import type { AdbService } from './services/adbService'
 import type { GnirehtetService } from './services/gnirehtetService'
@@ -103,14 +104,22 @@ async function saveSupportReport(
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Export Wirebound Support Report',
       defaultPath: join(app.getPath('documents'), `wirebound-support-${timestamp}.txt`),
-      filters: [{ name: 'Text file', extensions: ['txt'] }]
+      filters: [
+        { name: 'Text report', extensions: ['txt'] },
+        { name: 'Application log', extensions: ['log'] },
+        { name: 'Markdown', extensions: ['md'] },
+        { name: 'JSON', extensions: ['json'] },
+        { name: 'CSV', extensions: ['csv'] }
+      ]
     })
 
     if (result.canceled || !result.filePath) {
       return { success: true, cancelled: true }
     }
 
-    await writeFile(result.filePath, content, 'utf8')
+    const format = parseReportFormat(result.filePath)
+    if (!format) return { success: false, error: 'Choose a supported file extension.' }
+    await writeFile(result.filePath, formatSupportContent(content, format), 'utf8')
     return { success: true, filePath: result.filePath }
   } catch (error) {
     return {
@@ -228,7 +237,9 @@ export function registerIpcHandlers({
 
   ipcMain.handle('app:diagnostics', async (event) => {
     trusted(event)
-    const report = await adbService.getDiagnostics(gnirehtetService.getStatus())
+    const report = await adbService.getDiagnostics(gnirehtetService.getStatus(), (completed, total) => {
+      if (!event.sender.isDestroyed()) event.sender.send('app:diagnostics-progress', { completed, total })
+    })
     return {
       ...report,
       appVersion: app.getVersion(),

@@ -16,6 +16,7 @@ function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = []): string {
       onClearLogs={() => {}}
       diagnostics={{
         isRunning: false,
+        progress: { completed: 6, total: 6 },
         run: async () => {},
         report: {
           generatedAt: '2026-10-20T09:46:13Z',
@@ -32,9 +33,9 @@ function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = []): string {
 
 describe('Dashboard markup regressions', () => {
   it('disables Clear on empty engine logs and enables it with output', () => {
-    expect(renderDashboard([])).toContain('disabled="" title="Nothing to clear"')
+    expect(renderDashboard([])).toMatch(/disabled=""[^>]*title="Nothing to clear"/)
     expect(renderDashboard([], [{ timestamp: '12:00', message: 'ready', type: 'info' }]))
-      .not.toContain('disabled="" title="Nothing to clear"')
+      .not.toMatch(/disabled=""[^>]*title="Nothing to clear"/)
   })
 
   it('uses responsive cards, not a wide horizontal table, and masks visible device IDs', () => {
@@ -49,6 +50,9 @@ describe('Dashboard markup regressions', () => {
     expect(rendered).toContain('ZX...YY')
     expect(rendered).not.toContain('ZX9234YY')
     expect(rendered).toContain('0%')
+    expect(rendered).toContain('ADB Ready')
+    expect(rendered).not.toContain('ADB $Ready')
+    expect(rendered).toContain('Connect')
     expect(rendered).not.toContain('min-w-[920px]')
     expect(rendered).not.toContain('overflow-x-auto')
   })
