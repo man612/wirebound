@@ -46,6 +46,7 @@ interface DashboardProps {
     isRunning: boolean
     error?: string
     progress: { completed: number; total: number }
+    attempt: number
     run: () => Promise<void>
   }
   t: Translation
@@ -198,6 +199,7 @@ export default function Dashboard({
 }: DashboardProps): React.JSX.Element {
   const isRunning = status === 'connected'
   const isConnecting = status === 'connecting'
+  const relayActive = isRunning || isConnecting
   const isError = status === 'error'
   const setupState = getDeviceSetupState(devices, status, adbError, t)
   const SetupIcon = setupState.icon
@@ -225,7 +227,8 @@ export default function Dashboard({
   const deviceActionLockRef = useRef<Set<string>>(new Set())
   const [deviceActionIds, setDeviceActionIds] = useState<Set<string>>(() => new Set())
   const [deviceActionErrors, setDeviceActionErrors] = useState<Record<string, boolean>>({})
-  const [readyDismissed, setReadyDismissed] = useState(false)
+  const [dismissedNoticeTone, setDismissedNoticeTone] = useState<string | null>(null)
+  const noticeVisible = dismissedNoticeTone !== setupState.tone
   const hasFailedChecks = hasFailedDiagnosticChecks(diagnostics.report)
   const checkCount = diagnostics.report?.checks.filter(check => check.status !== 'info').length ?? 0
   const passedCount = diagnostics.report?.checks.filter(check => check.status === 'pass').length ?? 0
@@ -455,12 +458,12 @@ export default function Dashboard({
               {t.testDesktopSpeed}
             </button>
             </Tooltip>
-            <Tooltip text={isRunning ? (language === 'id' ? 'Putuskan seluruh koneksi USB Android' : 'Stop all Android USB connections') : (language === 'id' ? 'Bagikan koneksi komputer melalui kabel USB' : 'Share desktop internet over USB')}>
+            <Tooltip text={relayActive ? (language === 'id' ? 'Hentikan relay dan koneksi USB Android' : 'Stop the relay and Android USB connections') : (language === 'id' ? 'Bagikan koneksi komputer melalui kabel USB' : 'Share desktop internet over USB')}>
             <button
-              onClick={isRunning ? onStop : onStart}
-              disabled={isConnecting || isLoading}
+              onClick={relayActive ? onStop : onStart}
+              disabled={isLoading && !isConnecting}
               className={`group flex items-center gap-1.5 rounded-sm border px-4 py-1.5 text-xs font-semibold state-morph focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
-                isRunning
+                relayActive
                   ? 'border-red-200 bg-red-50 text-accent-red hover:bg-accent-red-dim focus-visible:ring-accent-red dark:border-red-900 dark:bg-red-900/20'
                   : 'border-accent-blue bg-accent-blue text-white hover:opacity-90 focus-visible:ring-accent-blue'
               }`}
@@ -469,24 +472,24 @@ export default function Dashboard({
                 <StopSquare
                   size={14}
                   className={`absolute inset-0 transition-all duration-300 ${
-                    isRunning ? 'scale-100 opacity-100' : 'scale-50 rotate-90 opacity-0'
+                    relayActive ? 'scale-100 opacity-100' : 'scale-50 rotate-90 opacity-0'
                   }`}
                 />
                 <Play
                   size={14}
                   className={`absolute inset-0 transition-all duration-300 ${
-                    !isRunning ? 'scale-100 opacity-100' : 'scale-50 -rotate-90 opacity-0'
+                    !relayActive ? 'scale-100 opacity-100' : 'scale-50 -rotate-90 opacity-0'
                   }`}
                 />
               </div>
-              {isRunning ? t.stop : isConnecting || isLoading ? t.connecting : t.start}
+              {relayActive ? t.stop : isLoading ? t.connecting : t.start}
             </button>
             </Tooltip>
           </div>
         </div>
 
-        <div className={`notice-fold ${!readyDismissed || setupState.tone !== 'ready' ? 'notice-fold-open' : 'notice-fold-closed'}`}
-          aria-hidden={readyDismissed && setupState.tone === 'ready'} inert={readyDismissed && setupState.tone === 'ready'}>
+        <div className={`notice-fold ${noticeVisible ? 'notice-fold-open' : 'notice-fold-closed'}`}
+          aria-hidden={!noticeVisible} inert={!noticeVisible}>
         <div className="notice-fold-content">
         <div
           className={`flex items-center gap-2 rounded-sm border px-3 py-2 theme-transition ${
@@ -514,8 +517,8 @@ export default function Dashboard({
               <p className="mt-1 break-all font-mono text-[10px] text-accent-red/80">{adbError}</p>
             )}
           </div>
-          {setupState.tone === 'ready' && (
-            <button type="button" onClick={() => setReadyDismissed(true)}
+          {(
+            <button type="button" onClick={() => setDismissedNoticeTone(setupState.tone)}
               aria-label={t.dismissNotice}
               className="ml-auto shrink-0 rounded-sm p-1 text-text-muted hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
               <X size={14} />
@@ -602,7 +605,7 @@ export default function Dashboard({
               <div role="progressbar" aria-label={language === 'id' ? 'Progres diagnostik' : 'Diagnostic progress'}
                 aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}
                 className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg-hover">
-                <div className="diagnostic-progress-fill h-full rounded-full bg-accent-blue"
+                <div key={diagnostics.attempt} className="diagnostic-progress-fill h-full rounded-full bg-accent-blue"
                   style={{ width: `${progressPercent}%` }}/>
               </div>
               <span className="w-9 text-right font-mono text-[10px] tabular-nums text-accent-blue">{progressPercent}%</span>

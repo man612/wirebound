@@ -104,7 +104,8 @@ export class GnirehtetService {
   private async launchRelay(
     dnsInput: string,
     portInput: string,
-    generation: number
+    generation: number,
+    mode: 'autorun' | 'relay' = 'autorun'
   ): Promise<ActionResult> {
     if (!this.fileExists(this.paths.gnirehtetExe)) {
       return this.fail(`Gnirehtet runtime not found: ${this.paths.gnirehtetExe}`)
@@ -126,7 +127,9 @@ export class GnirehtetService {
         return { success: false, error: 'Wirebound engine start was cancelled.' }
       }
 
-      const childProcess = this.spawnProcess(this.paths.gnirehtetExe, ['autorun', '-d', dns, '-p', port], {
+      const childProcess = this.spawnProcess(this.paths.gnirehtetExe, mode === 'relay'
+        ? ['relay', '-p', port]
+        : ['autorun', '-d', dns, '-p', port], {
         cwd: this.paths.gnirehtetDir,
         env: {
           ...process.env,
@@ -146,58 +149,68 @@ export class GnirehtetService {
     }
   }
 
-  public startDevice(
-    deviceId: string,
-    dnsInput: string,
-    portInput: string
-  ): Promise<ActionResult> {
-    const childProcess = this.childProcess
-    if (!childProcess || this.isStopping || this.requestedStops.has(childProcess)) {
-      return Promise.resolve({
-        success: false,
-        error: 'Start the Wirebound engine before connecting one device.'
-      })
+
+  /** A per-device Connect button starts only the relay and selected phone.
+   * The global Start action intentionally keeps the original autorun-all behavior.
+   */
+  private startManualRelay(dns: string, port: string): Promise<ActionResult> {
+    if (this.startPromise) return this.startPromise
+    if (this.isStopping) {
+      return Promise.resolve({ success: false, error: 'Wirebound engine is stopping.' })
     }
+    if (this.childProcess) return Promise.resolve({ success: true })
+    const generation = ++this.lifecycleGeneration
+    const pending = this.launchRelay(dns, port, generation, 'relay')
+    this.startPromise = pending
+    void pending.then(
+      () => { if (this.startPromise === pending) this.startPromise = null },
+      () => { if (this.startPromise === pending) this.startPromise = null }
+    )
+    return pending
+  }
+
+  public startDevice(deviceId: string, dnsInput: string, portInput: string): Promise<ActionResult> {
     if (!this.isValidDeviceId(deviceId)) {
       return Promise.resolve({ success: false, error: 'Device id is invalid.' })
     }
     this.rememberDeviceId(deviceId)
 
-    const generation = this.lifecycleGeneration
-    const dns = normalizeDns(dnsInput)
-    const port = normalizePort(portInput)
-    const cancelled = (): boolean =>
-      generation !== this.lifecycleGeneration ||
-      this.isStopping ||
-      this.childProcess !== childProcess ||
-      this.requestedStops.has(childProcess)
-
-    // Stop must wait for any already dispatched device-start command before
-    // its final Android-client cleanup. Otherwise a delayed command may
-    // reactivate the VPN after a successful Stop has been reported.
+    // The entire operation is registered before any await so Stop can drain it.
     const pending = (async (): Promise<ActionResult> => {
+      if (!this.childProcess) {
+        const started = await this.startManualRelay(dnsInput, portInput)
+        if (!started.success) return started
+      } else if (this.startPromise) {
+        const started = await this.startPromise
+        if (!started.success) return started
+      }
+
+      const process = this.childProcess
+      if (!process || this.isStopping || this.requestedStops.has(process)) {
+        return { success: false, error: 'The Wirebound relay is no longer available.' }
+      }
+      const generation = this.lifecycleGeneration
+      const dns = normalizeDns(dnsInput)
+      const port = normalizePort(portInput)
+      const cancelled = (): boolean =>
+        generation !== this.lifecycleGeneration ||
+        this.isStopping ||
+        this.childProcess !== process ||
+        this.requestedStops.has(process)
+
       try {
         await this.adbService.ensureServerReady()
-        if (cancelled()) {
-          return { success: false, error: 'Device start was cancelled because the engine stopped.' }
-        }
+        if (cancelled()) return { success: false, error: 'Device start was cancelled because the engine stopped.' }
         await this.runDeviceCommand(['start', deviceId, '-d', dns, '-p', port], 10_000)
-        if (cancelled()) {
-          return { success: false, error: 'Device start was cancelled because the engine stopped.' }
-        }
+        if (cancelled()) return { success: false, error: 'Device start was cancelled because the engine stopped.' }
         this.emitSafeLog('Requested tethering start for the selected Android device.', 'info')
         await this.syncStatusWithDeviceState()
-        if (cancelled()) {
-          return { success: false, error: 'Device start was cancelled because the engine stopped.' }
-        }
+        if (cancelled()) return { success: false, error: 'Device start was cancelled because the engine stopped.' }
         return { success: true }
       } catch (error) {
         const message = readError(error, 'Failed to start tethering on the selected device.')
         this.emitSafeLog(message, 'stderr')
-        return {
-          success: false,
-          error: redactGnirehtetLogLine(message, [...this.knownDeviceIds])
-        }
+        return { success: false, error: redactGnirehtetLogLine(message, [...this.knownDeviceIds]) }
       }
     })()
     this.pendingDeviceStarts.add(pending)

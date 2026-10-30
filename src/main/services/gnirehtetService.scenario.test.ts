@@ -157,6 +157,41 @@ describe('GnirehtetService lifecycle scenarios', () => {
     expect(service.getStatus()).toBe('connected')
   })
 
+  it('Connect for one device starts relay-only without global autorun', async () => {
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const commandRunner = vi.fn().mockResolvedValue('')
+    const { adb } = createAdbDouble()
+    const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true, commandRunner)
+
+    await expect(service.startDevice('ABC123', '8.8.8.8', '31416')).resolves.toEqual({ success: true })
+    expect(spawnProcess).toHaveBeenCalledTimes(1)
+    expect(spawnProcess).toHaveBeenCalledWith(paths.gnirehtetExe,
+      ['relay', '-p', '31416'], expect.any(Object))
+    expect(commandRunner).toHaveBeenCalledOnce()
+    expect(commandRunner).toHaveBeenCalledWith(['start', 'ABC123', '-d', '8.8.8.8', '-p', '31416'], 10_000)
+    expect(service.getStatus()).toBe('connecting')
+    await service.stop()
+  })
+
+  it('does not spawn a per-device relay after Stop cancels pending ADB startup', async () => {
+    let release!: () => void
+    const wait = new Promise<void>(resolve => { release = resolve })
+    const child = createFakeProcess()
+    const spawnProcess = vi.fn(() => child) as unknown as typeof import('child_process').spawn
+    const runner = vi.fn().mockResolvedValue('')
+    const { adb, ensureServerReady } = createAdbDouble()
+    ensureServerReady.mockReturnValueOnce(wait).mockResolvedValue(undefined)
+    const service = new GnirehtetService(paths, adb, vi.fn(), vi.fn(), spawnProcess, () => true, runner)
+    const deviceStart = service.startDevice('ABC123', '8.8.8.8', '31416')
+    const stop = service.stop()
+    release()
+    expect((await deviceStart).success).toBe(false)
+    expect((await stop).success).toBe(true)
+    expect(spawnProcess).not.toHaveBeenCalled()
+    expect(runner).not.toHaveBeenCalled()
+  })
+
   it('rejects unsafe device identifiers before invoking Gnirehtet', async () => {
     const commandRunner = vi.fn().mockResolvedValue('')
     const { adb } = createAdbDouble()

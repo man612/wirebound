@@ -1,13 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { AdbDevice, DiagnosticCheck, LogEntry } from '../../../../shared/types'
+import type { AdbDevice, ConnectionStatus, DiagnosticCheck, LogEntry } from '../../../../shared/types'
 import { translations } from '../../i18n'
 import Dashboard from './Dashboard'
 
-function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = [], checks: DiagnosticCheck[] = []): string {
+function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = [], checks: DiagnosticCheck[] = [], status: ConnectionStatus = 'disconnected'): string {
   return renderToStaticMarkup(
     <Dashboard
-      status="disconnected"
+      status={status}
       isLoading={false}
       onStart={async () => {}}
       onStop={async () => {}}
@@ -17,6 +17,7 @@ function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = [], checks: Di
       diagnostics={{
         isRunning: false,
         progress: { completed: 6, total: 6 },
+        attempt: 1,
         run: async () => {},
         report: {
           generatedAt: '2026-10-20T09:46:13Z',
@@ -68,6 +69,19 @@ describe('Dashboard markup regressions', () => {
     expect(rendered).toContain('5/5')
     expect(rendered).toContain('1 info')
     expect(rendered).not.toContain('5/6')
+  })
+
+  it('enables per-device Connect before global Start, and can dismiss the active notice', () => {
+    const phone: AdbDevice = {
+      id: 'ZX9234YY', name: 'Motorola moto g45 5G', status: 'device', tunnelStatus: 'idle'
+    }
+    const idle = renderDashboard([phone])
+    const action = idle.match(/<button([^>]*)>(?:(?!<\/button>).)*Connect<\/button>/s)
+    expect(action).not.toBeNull()
+    expect(action?.[1]).not.toContain(' disabled=""')
+    const active = renderDashboard([{ ...phone, tunnelStatus: 'connected' }], [], [], 'connected')
+    expect(active).toContain('aria-label="Dismiss notice"')
+    expect(active).toContain('Stop Connection')
   })
 
   it('renders the diagnostic disclosure with accessible expanded state', () => {

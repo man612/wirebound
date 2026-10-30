@@ -359,7 +359,7 @@ body {
 }
 .diagnostic-progress-shell > div { min-height: 0; overflow: hidden; }
 .diagnostic-progress-open { grid-template-rows: 1fr; opacity: 1; }
-.diagnostic-progress-fill { transition: width 350ms cubic-bezier(.2,.8,.2,1); }
+.diagnostic-progress-fill { transition: width 220ms cubic-bezier(.2,.8,.2,1); }
 .motion-log-line { animation: tooltip-enter 170ms ease-out; }
 
 .wirebound-dialog-shell {
@@ -413,9 +413,8 @@ body {
 /* Scrollbars must never appear horizontally in the icon navigation. */
 aside nav { overflow-x: hidden; }
 
-.log-follow-paused,
 .log-follow-paused:not(:disabled) {
-  border-color: var(--accent-yellow) !important;
-  color: var(--accent-yellow) !important;
-  background: color-mix(in srgb, var(--accent-yellow) 11%, var(--bg-primary));
+  border-color: var(--border-focus);
+  color: var(--accent-blue);
+  background: var(--bg-hover);
 }

@@ -72,7 +72,7 @@ export default function DeviceRow({
   const battery = getBatteryPresentation(device.battery, device.batteryStatus, language)
   const connected = device.tunnelStatus === 'connected'
   const isDeviceReady = device.status === 'device'
-  const canAct = isDeviceReady && engineStatus === 'connected' && !busy
+  const canAct = isDeviceReady && engineStatus !== 'connecting' && !busy
   const batteryLabel = language === 'id' ? 'Baterai' : 'Battery'
   const subtitle = [
     device.androidVersion ? `Android ${device.androidVersion}` : undefined,
