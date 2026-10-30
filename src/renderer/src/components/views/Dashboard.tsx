@@ -28,6 +28,7 @@ import { hasFailedDiagnosticChecks } from './diagnosticsDisclosure'
 import DeviceRow from './DeviceRow'
 import TerminalLog from './TerminalLog'
 import ConfirmDialog from '../ui/ConfirmDialog'
+import Tooltip from '../ui/Tooltip'
 
 let dashboardHasMountedOnce = false
 
@@ -226,6 +227,10 @@ export default function Dashboard({
   const [deviceActionErrors, setDeviceActionErrors] = useState<Record<string, boolean>>({})
   const [readyDismissed, setReadyDismissed] = useState(false)
   const hasFailedChecks = hasFailedDiagnosticChecks(diagnostics.report)
+  const checkCount = diagnostics.report?.checks.filter(check => check.status !== 'info').length ?? 0
+  const passedCount = diagnostics.report?.checks.filter(check => check.status === 'pass').length ?? 0
+  const infoCount = diagnostics.report?.checks.filter(check => check.status === 'info').length ?? 0
+  const statusMessageVisible = diagnostics.isRunning || diagnosticsFeedback !== null || copyState === 'success' || copyState === 'error'
   const progressPercent = diagnostics.progress.total > 0
     ? Math.round(100 * diagnostics.progress.completed / diagnostics.progress.total) : 0
   const diagnosticsVisible =
@@ -438,6 +443,7 @@ export default function Dashboard({
             <p className="mt-1 text-xs text-text-secondary">{t.onboardingDesc}</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 md:shrink-0">
+            <Tooltip text={language === 'id' ? 'Buka tes kecepatan internet komputer' : 'Open the desktop internet speed test'}>
             <button
               onClick={handleOpenDesktopSpeedTest}
               className="group flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-surface px-3 py-1.5 text-xs text-text-secondary transition-all duration-200 hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus active:scale-[0.96]"
@@ -448,6 +454,8 @@ export default function Dashboard({
               />
               {t.testDesktopSpeed}
             </button>
+            </Tooltip>
+            <Tooltip text={isRunning ? (language === 'id' ? 'Putuskan seluruh koneksi USB Android' : 'Stop all Android USB connections') : (language === 'id' ? 'Bagikan koneksi komputer melalui kabel USB' : 'Share desktop internet over USB')}>
             <button
               onClick={isRunning ? onStop : onStart}
               disabled={isConnecting || isLoading}
@@ -473,11 +481,13 @@ export default function Dashboard({
               </div>
               {isRunning ? t.stop : isConnecting || isLoading ? t.connecting : t.start}
             </button>
+            </Tooltip>
           </div>
         </div>
 
-        <div className={`notice-fold ${!readyDismissed || setupState.tone !== 'ready' ? 'notice-fold-open' : ''}`}
+        <div className={`notice-fold ${!readyDismissed || setupState.tone !== 'ready' ? 'notice-fold-open' : 'notice-fold-closed'}`}
           aria-hidden={readyDismissed && setupState.tone === 'ready'} inert={readyDismissed && setupState.tone === 'ready'}>
+        <div className="notice-fold-content">
         <div
           className={`flex items-center gap-2 rounded-sm border px-3 py-2 theme-transition ${
             setupState.tone === 'active' || setupState.tone === 'ready'
@@ -513,8 +523,9 @@ export default function Dashboard({
           )}
         </div>
         </div>
+        </div>
 
-        <div className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
+        <div className="rounded-sm border border-border-subtle bg-bg-surface px-3 py-2.5 theme-transition">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <Stethoscope size={14} className="shrink-0 text-accent-blue" />
@@ -522,7 +533,7 @@ export default function Dashboard({
                 <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted">{t.diagnostics}</div>
                 {diagnostics.report && (
                   <p className="mt-0.5 text-[10px] text-text-secondary">
-                    {diagnostics.report.checks.filter((check) => check.status === 'pass').length}/{diagnostics.report.checks.length} {t.diagnosticsPassed}
+                    {passedCount}/{checkCount} {t.diagnosticsPassed}{infoCount > 0 ? ` · ${infoCount} ${language === 'id' ? 'informasi' : 'info'}` : ''}
                   </p>
                 )}
               </div>
@@ -563,7 +574,8 @@ export default function Dashboard({
             </div>
           </div>
 
-          <div role="status" aria-live="polite" aria-atomic="true" className="min-h-[18px] text-[11px] text-text-secondary">
+          <div className={`diagnostic-status-fold ${statusMessageVisible ? 'diagnostic-status-open' : ''}`}>
+          <div role="status" aria-live="polite" aria-atomic="true" className="text-[11px] text-text-secondary">
             {diagnostics.isRunning || diagnosticsFeedback === 'running' ? (
               <span className="motion-feedback motion-feedback-visible inline-flex items-center gap-1.5 text-accent-blue">
                 <RefreshCw size={12} className="motion-safe:animate-spin" /> {t.diagnosticsChecking}
@@ -582,9 +594,11 @@ export default function Dashboard({
               <span className="ml-2 text-accent-red">{t.reportCopyFailed}</span>
             )}
           </div>
+          </div>
           <div className={`diagnostic-progress-shell ${diagnostics.isRunning || progressBarVisible ? 'diagnostic-progress-open' : ''}`}
             aria-hidden={!(diagnostics.isRunning || progressBarVisible)}>
-            <div className="my-2 flex items-center gap-3">
+            <div className="min-h-0 overflow-hidden">
+              <div className="my-2 flex items-center gap-3">
               <div role="progressbar" aria-label={language === 'id' ? 'Progres diagnostik' : 'Diagnostic progress'}
                 aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent}
                 className="h-1.5 flex-1 overflow-hidden rounded-full bg-bg-hover">
@@ -592,6 +606,7 @@ export default function Dashboard({
                   style={{ width: `${progressPercent}%` }}/>
               </div>
               <span className="w-9 text-right font-mono text-[10px] tabular-nums text-accent-blue">{progressPercent}%</span>
+              </div>
             </div>
           </div>
           <div id="wirebound-diagnostic-details" className={"diagnostics-fold " + (diagnosticsVisible ? "diagnostics-fold-open" : "")}

@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { AdbDevice, LogEntry } from '../../../../shared/types'
+import type { AdbDevice, DiagnosticCheck, LogEntry } from '../../../../shared/types'
 import { translations } from '../../i18n'
 import Dashboard from './Dashboard'
 
-function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = []): string {
+function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = [], checks: DiagnosticCheck[] = []): string {
   return renderToStaticMarkup(
     <Dashboard
       status="disconnected"
@@ -21,7 +21,7 @@ function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = []): string {
         report: {
           generatedAt: '2026-10-20T09:46:13Z',
           engineStatus: 'disconnected',
-          checks: [],
+          checks,
           devices: []
         }
       }}
@@ -55,6 +55,19 @@ describe('Dashboard markup regressions', () => {
     expect(rendered).toContain('Connect')
     expect(rendered).not.toContain('min-w-[920px]')
     expect(rendered).not.toContain('overflow-x-auto')
+  })
+
+  it('does not count informational stopped-client status as a failed check', () => {
+    const checks: DiagnosticCheck[] = [
+      ...(['adbRuntime', 'gnirehtetRuntime', 'adbQuery', 'deviceAccess', 'androidVersion'] as const).map(
+        (id): DiagnosticCheck => ({ id, status: 'pass', detail: 'OK' })
+      ),
+      { id: 'gnirehtetClient', status: 'info', detail: 'The Wirebound engine is stopped.' }
+    ]
+    const rendered = renderDashboard([], [], checks)
+    expect(rendered).toContain('5/5')
+    expect(rendered).toContain('1 info')
+    expect(rendered).not.toContain('5/6')
   })
 
   it('renders the diagnostic disclosure with accessible expanded state', () => {

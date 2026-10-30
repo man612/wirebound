@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import TitleBar from './components/layout/TitleBar'
 import Sidebar from './components/layout/Sidebar'
@@ -18,7 +18,17 @@ function App(): React.JSX.Element {
   const { devices, error: adbError } = useDevices()
   const { settings, updateSettings, loaded } = useSettings()
   const diagnostics = useDiagnostics()
+  const previousSettledStatusRef = useRef(status)
   const version = useAppVersion()
+
+  // The diagnostic report is a snapshot. Refresh after real connection changes.
+  useEffect(() => {
+    if (status !== 'connected' && status !== 'disconnected' && status !== 'error') return
+    if (previousSettledStatusRef.current === status) return
+    previousSettledStatusRef.current = status
+    const timer = window.setTimeout(() => { void diagnostics.run() }, status === 'connected' ? 1800 : 450)
+    return () => window.clearTimeout(timer)
+  }, [status, diagnostics.run])
   const t = translations[(settings?.language as Language) || 'en']
 
   const navigate = (next: AppPage): void => {

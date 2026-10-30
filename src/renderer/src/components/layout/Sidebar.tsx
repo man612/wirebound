@@ -50,7 +50,7 @@ export default function Sidebar({ activePage, onNavigate, t, language, version }
 
   return (
     <aside className="w-[200px] shrink-0 border-r border-border-subtle bg-bg-primary flex flex-col pt-8 pb-3 theme-transition">
-      <nav className="flex-1 min-h-0 custom-scrollbar overflow-y-auto py-3" aria-label={id ? 'Navigasi utama' : 'Main navigation'}>
+      <nav className="flex-1 min-h-0 custom-scrollbar overflow-y-auto overflow-x-hidden py-3" aria-label={id ? 'Navigasi utama' : 'Main navigation'}>
         {groups.map((group) => (
           <div key={group.title} className="mb-3">
             <div className="px-4 mb-1 text-[9px] font-bold tracking-[0.12em] text-text-muted">
@@ -59,7 +59,7 @@ export default function Sidebar({ activePage, onNavigate, t, language, version }
             {group.items.map(({ page, label, icon: Icon, hint }) => {
               const selected = activePage === page
               return (
-                <Tooltip key={page} text={hint} side="right" className="w-full">
+                <Tooltip key={page} text={hint} side="right" className="w-full" delay={1300}>
                 <button type="button" onClick={() => onNavigate(page)}
                   aria-current={selected ? 'page' : undefined}
                   className={`motion-control motion-nav relative w-full min-h-[33px] flex items-center gap-2.5 px-4 py-1.5 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-border-focus ${

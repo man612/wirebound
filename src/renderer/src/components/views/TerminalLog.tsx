@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ClipboardCopy, FileDown, ChevronsDown, Pause, Play, Terminal, Trash2 } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Check, ClipboardCopy, FileDown, ListEnd, Pause, Play, Terminal, Trash2 } from 'lucide-react'
 import type { AdbDevice, LogEntry } from '../../../../shared/types'
 import type { Language, Translation } from '../../i18n'
 import { maskDeviceId } from '../../formatters'
@@ -41,11 +41,11 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
   const allText = useMemo(() => renderSafeLogLines(logs, devices), [logs, devices])
   const visibleLogs = filter === 'errors' ? logs.filter(x => x.type === 'stderr') : logs
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (followRef.current && viewportRef.current) {
       viewportRef.current.scrollTop = viewportRef.current.scrollHeight
     }
-  }, [logs])
+  }, [logs, filter])
 
   useEffect(() => () => {
     if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
@@ -62,7 +62,7 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
     setFollowing(true)
     setPausedAt(logs.length)
     const viewport = viewportRef.current
-    if (viewport) viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' })
+    if (viewport) viewport.scrollTop = viewport.scrollHeight
   }
 
   const toggleFollow = (): void => {
@@ -74,14 +74,24 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
     } else scrollLatest()
   }
 
-  const onScroll = (): void => {
-    const viewport = viewportRef.current
-    if (!viewport || !followRef.current || empty) return
-    if (viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight > 30) {
-      followRef.current = false
-      setPausedAt(logs.length)
-      setFollowing(false)
-    }
+  const pauseForUserScroll = (): void => {
+    if (empty || !followRef.current) return
+    followRef.current = false
+    setPausedAt(logs.length)
+    setFollowing(false)
+  }
+
+  // Programmatic bottom-scrolling is not a user request to pause. Only deliberate
+  // wheel, keyboard or scrollbar interactions can pause auto-follow.
+  const onUserWheel = (e: React.WheelEvent<HTMLDivElement>): void => {
+    if (e.deltaY < 0 && e.currentTarget.scrollHeight > e.currentTarget.clientHeight) pauseForUserScroll()
+  }
+  const onUserKey = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (['ArrowUp', 'PageUp', 'Home'].includes(e.key)) pauseForUserScroll()
+  }
+  const onUserPointer = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (e.clientX >= rect.right - 15 && e.currentTarget.scrollHeight > e.currentTarget.clientHeight) pauseForUserScroll()
   }
 
   const copyLogs = async (): Promise<void> => {
@@ -130,14 +140,19 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
             ? id ? 'Jeda otomatis mengikuti log terbaru' : 'Pause automatic following of new entries'
             : id ? 'Lanjut mengikuti log terbaru' : 'Resume automatic following of new entries'}>
             <button type="button" disabled={empty} onClick={toggleFollow} aria-pressed={!following}
-              className="motion-control log-tool" aria-label={following ? 'Pause auto-follow' : 'Resume auto-follow'}>
+              className={`motion-control log-tool ${!following ? 'log-follow-paused' : ''}`} aria-label={following ? 'Pause auto-follow' : 'Resume auto-follow'}>
               {following ? <Pause size={12}/> : <Play size={12}/>}
               <span>{following ? (id ? 'Jeda' : 'Pause') : (id ? 'Lanjut' : 'Resume')}</span>
             </button>
           </Tooltip>
+          {!following && !empty && (
+            <span className="motion-enter mr-1 rounded border border-accent-yellow/30 bg-accent-yellow/10 px-1.5 py-1 text-[10px] font-medium text-accent-yellow">
+              {id ? 'Auto-follow dijeda' : 'Auto-follow paused'}
+            </span>
+          )}
           <Tooltip text={id ? 'Gulir ke baris log terbaru' : 'Jump to the latest log entry'}>
             <button type="button" disabled={empty} className="motion-control log-tool" onClick={scrollLatest}
-              aria-label={id ? 'Ke log terbaru' : 'Jump to latest'}><ChevronsDown size={15}/></button>
+              aria-label={id ? 'Ke log terbaru' : 'Jump to latest'}><ListEnd size={15}/></button>
           </Tooltip>
           <Tooltip text={id ? 'Salin log yang disamarkan' : 'Copy redacted logs'}>
             <button type="button" className="motion-control log-tool" onClick={() => void copyLogs()} disabled={empty}
@@ -155,7 +170,8 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
         </div>
       </div>
       <div className="relative min-h-0">
-        <div ref={viewportRef} onScroll={onScroll}
+        <div ref={viewportRef} onWheel={onUserWheel} onKeyDown={onUserKey}
+          onPointerDown={onUserPointer} tabIndex={empty ? -1 : 0}
           className={`custom-scrollbar overflow-y-auto rounded-md border border-border-subtle bg-bg-primary p-3 font-mono text-[10px] ${full ? 'h-[calc(100vh-195px)]' : 'h-40'}`}
           role="log" aria-label={t.terminalLabel}>
           {visibleLogs.length === 0 ? (
@@ -187,7 +203,6 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
           <Check size={11}/>{feedback === 'exported' ? (id ? 'Log diekspor' : 'Logs exported') : (id ? 'Log tersalin' : 'Logs copied')}
         </span>
         {feedback === 'error' && <span className="motion-enter ml-2 text-accent-red">{id ? 'Operasi gagal' : 'Action failed'}</span>}
-        {!following && !empty && <span className="ml-2 text-accent-yellow">{id ? 'Auto-scroll dijeda' : 'Auto-follow paused'}</span>}
       </div>
       <ConfirmDialog open={clearPrompt} title={id ? 'Bersihkan log?' : 'Clear terminal logs?'}
         message={id ? 'Semua log yang tampil akan dihapus dari sesi ini. Tindakan ini tidak memutuskan koneksi.' : 'All log entries in this session will be cleared. Your connection stays active.'}

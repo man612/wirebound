@@ -250,7 +250,8 @@ body {
   transform: translateY(-1px);
 }
 .motion-nav:hover:not(:disabled) {
-  transform: translateX(2px);
+  /* Hover emphasis uses color only: a moving 100%-width row caused a phantom scrollbar. */
+  transform: none;
 }
 .motion-row {
   transition: background-color var(--motion-normal) var(--motion-ease),
@@ -395,4 +396,26 @@ body {
 }
 .notice-fold > div { min-height: 0; overflow: hidden; }
 .notice-fold-open { grid-template-rows: 1fr; opacity: 1; }
+/* A collapsed flex item still consumes the parent's gap; neutralize that gap. */
+.notice-fold-closed { margin-bottom: -1rem; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .notice-fold { transition: none !important; } }
+
+.diagnostic-status-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 240ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease;
+}
+.diagnostic-status-fold > div { min-height: 0; overflow: hidden; }
+.diagnostic-status-open { grid-template-rows: 1fr; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .diagnostic-status-fold { transition: none !important; } }
+
+/* Scrollbars must never appear horizontally in the icon navigation. */
+aside nav { overflow-x: hidden; }
+
+.log-follow-paused,
+.log-follow-paused:not(:disabled) {
+  border-color: var(--accent-yellow) !important;
+  color: var(--accent-yellow) !important;
+  background: color-mix(in srgb, var(--accent-yellow) 11%, var(--bg-primary));
+}
