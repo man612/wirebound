@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
-  Battery,
   CheckCircle2,
   ClipboardCopy,
   ChevronDown,
@@ -9,16 +8,12 @@ import {
   X,
   Download,
   Laptop,
-  Link2,
   Play,
   RefreshCw,
   ShieldAlert,
   Square as StopSquare,
   Stethoscope,
-  Terminal,
-  Unplug,
-  Usb,
-  Zap
+  Usb
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type {
@@ -26,12 +21,13 @@ import type {
   ConnectionStatus,
   DiagnosticCheckId,
   DiagnosticReport,
-  DeviceTunnelStatus,
   LogEntry
 } from '../../../../shared/types'
 import type { Language, Translation } from '../../i18n'
 import { formatUiTimestamp, maskDeviceId } from '../../formatters'
 import { hasFailedDiagnosticChecks } from './diagnosticsDisclosure'
+import DeviceRow from './DeviceRow'
+import TerminalLog from './TerminalLog'
 
 interface DashboardProps {
   status: ConnectionStatus
@@ -64,46 +60,6 @@ function getDeviceStatusLabel(status: AdbDevice['status'], t: Translation): stri
   if (status === 'unauthorized') return t.adbStatusUnauthorized
   if (status === 'offline') return t.adbStatusOffline
   return t.adbStatusNoAccess
-}
-
-function getTunnelStatusLabel(
-  status: DeviceTunnelStatus | undefined,
-  t: Translation
-): string {
-  if (status === 'connected') return t.tunnelConnected
-  if (status === 'waiting') return t.tunnelWaiting
-  if (status === 'idle') return t.tunnelIdle
-  if (status === 'error') return t.tunnelError
-  return t.tunnelUnavailable
-}
-
-function getTunnelStatusClass(status: DeviceTunnelStatus | undefined): string {
-  if (status === 'connected') {
-    return 'border-accent-green/30 bg-accent-green-dim/40 text-accent-green'
-  }
-  if (status === 'waiting') {
-    return 'border-accent-yellow/30 bg-amber-50 text-amber-700 dark:bg-yellow-950/20 dark:text-accent-yellow'
-  }
-  if (status === 'error') {
-    return 'border-accent-red/30 bg-accent-red-dim/40 text-accent-red'
-  }
-  return 'border-border-subtle bg-bg-primary text-text-muted'
-}
-
-function formatBytes(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value) || value < 0) return '--'
-
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let amount = value
-  let unitIndex = 0
-
-  while (amount >= 1024 && unitIndex < units.length - 1) {
-    amount /= 1024
-    unitIndex += 1
-  }
-
-  const digits = amount >= 100 || unitIndex === 0 ? 0 : amount >= 10 ? 1 : 2
-  return `${amount.toFixed(digits)} ${units[unitIndex]}`
 }
 
 function getDeviceSetupState(
@@ -241,8 +197,6 @@ export default function Dashboard({
   const isError = status === 'error'
   const setupState = getDeviceSetupState(devices, status, adbError, t)
   const SetupIcon = setupState.icon
-  const logViewportRef = useRef<HTMLDivElement>(null)
-  const logPinnedToBottomRef = useRef(true)
   const collapseTimerRef = useRef<number | null>(null)
   const copyTimerRef = useRef<number | null>(null)
   const manuallyToggledRef = useRef(false)
@@ -317,19 +271,6 @@ export default function Dashboard({
       }, 2600)
     }
   }, [rerunCycle, diagnostics.error, hasFailedChecks])
-
-  // Scroll only the terminal viewport, never its ancestor dashboard.
-  useEffect(() => {
-    const viewport = logViewportRef.current
-    if (viewport && logPinnedToBottomRef.current) viewport.scrollTop = viewport.scrollHeight
-  }, [logs])
-
-  const handleLogScroll = (): void => {
-    const viewport = logViewportRef.current
-    if (!viewport) return
-    logPinnedToBottomRef.current =
-      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 28
-  }
 
   const handleToggleDiagnostics = (): void => {
     manuallyToggledRef.current = true
@@ -603,7 +544,9 @@ export default function Dashboard({
               <div className="h-full w-1/3 bg-accent-blue motion-safe:animate-shimmer" />
             </div>
           )}
-          <div id="wirebound-diagnostic-details" hidden={!diagnosticsVisible}>
+          <div id="wirebound-diagnostic-details" className={"diagnostics-fold " + (diagnosticsVisible ? "diagnostics-fold-open" : "")}
+            inert={!diagnosticsVisible} aria-hidden={!diagnosticsVisible}>
+            <div className="diagnostics-fold-content">
           {!diagnostics.report && !diagnostics.error && (
             <p className="mt-2 text-xs text-text-secondary">{t.diagnosticsIdle}</p>
           )}
@@ -646,22 +589,19 @@ export default function Dashboard({
               </div>
 
               {diagnostics.report.devices.length > 0 && (
-                <div className="mt-3 border-t border-border-subtle pt-2">
-                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                    {t.diagnosticDevices}
-                  </div>
-                  {diagnostics.report.devices.map((device) => (
-                    <div key={device.id} className="mt-2 rounded-sm border border-border-subtle bg-bg-primary p-2.5">
-                      <div className="break-words text-xs font-semibold text-text-primary">{device.name || '--'}</div>
-                      <div className="mt-2 grid gap-x-4 gap-y-1 text-[11px] text-text-secondary sm:grid-cols-2 xl:grid-cols-3">
-                        <div><span className="text-text-muted">{t.deviceId}:</span> <span className="break-all font-mono">{maskDeviceId(device.id)}</span></div>
-                        <div><span className="text-text-muted">{t.deviceStatus}:</span> {getDeviceStatusLabel(device.status, t)}</div>
-                        <div><span className="text-text-muted">{t.diagAndroidVersion}:</span> {device.androidVersion ? `Android ${device.androidVersion} / API ${device.apiLevel ?? '?'}` : '--'}</div>
-                        <div><span className="text-text-muted">{t.gnirehtetInstalled}:</span> {device.status === 'device' ? device.gnirehtetInstalled ? t.yes : t.no : '--'}</div>
-                        <div><span className="text-text-muted">{t.gnirehtetActive}:</span> {device.status === 'device' ? device.gnirehtetActive ? t.yes : t.no : '--'}</div>
+                <div className="mt-2 border-t border-border-subtle pt-2">
+                  <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-text-muted">{t.diagnosticDevices}</div>
+                  <div className="space-y-1">
+                    {diagnostics.report.devices.map((device) => (
+                      <div key={device.id} className="motion-row flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border-subtle bg-bg-primary px-2.5 py-2 text-[10px]">
+                        <strong className="min-w-0 flex-[1_1_150px] truncate text-text-primary" title={device.name}>{device.name || "--"}</strong>
+                        <span className="text-text-secondary">{device.androidVersion ? "Android " + device.androidVersion + " · API " + (device.apiLevel ?? "?") : "--"}</span>
+                        <span className="text-text-secondary">ADB {getDeviceStatusLabel(device.status, t)}</span>
+                        <span className="font-mono text-text-muted">{maskDeviceId(device.id)}</span>
+                        <span className="text-text-muted">{t.gnirehtetActive}: {device.gnirehtetActive ? t.yes : t.no}</span>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -671,6 +611,7 @@ export default function Dashboard({
               </p>
             </>
           )}
+            </div>
           </div>
         </div>
 
@@ -688,109 +629,23 @@ export default function Dashboard({
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {devices.map((device) => (
-              <article key={device.id} className="rounded-sm border border-border-subtle bg-bg-surface p-3 theme-transition">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="break-words text-xs font-semibold text-text-primary">{device.name || 'Unknown'}</h3>
-                    <p className="mt-1 break-all font-mono text-[10px] text-text-muted">
-                      {t.deviceId}: {maskDeviceId(device.id)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={'inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-semibold ' +
-                      (device.status === 'device'
-                        ? 'border-accent-green/30 bg-accent-green-dim/40 text-accent-green'
-                        : device.status === 'unauthorized' || device.status === 'no permissions'
-                          ? 'border-accent-red/30 bg-accent-red-dim/40 text-accent-red'
-                          : 'border-accent-yellow/30 bg-amber-50 text-amber-700 dark:bg-yellow-950/20 dark:text-accent-yellow')}>
-                      {t.deviceStatus}: {getDeviceStatusLabel(device.status, t)}
-                    </span>
-                    <span className={'inline-flex items-center rounded-sm border px-2 py-1 text-[10px] font-semibold ' +
-                      getTunnelStatusClass(device.tunnelStatus)}>
-                      {t.tunnelStatus}: {getTunnelStatusLabel(device.tunnelStatus, t)}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-2">
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-secondary">
-                    <span className="inline-flex items-center gap-1"><Battery size={12} />
-                      {t.power}: {device.battery !== undefined && device.battery !== '' ? device.battery + '%' : '--'}
-                    </span>
-                    <span title={device.traffic ? device.traffic.interfaceName + ' kernel counters' : t.trafficUnavailable}
-                      className="font-mono">
-                      RX {formatBytes(device.traffic?.rxBytes)} / TX {formatBytes(device.traffic?.txBytes)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button type="button" onClick={() => void handleDeviceTunnelAction(device)}
-                      disabled={device.status !== 'device' || (!isRunning && !isConnecting) || deviceActionIds.has(device.id)}
-                      className={'inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:cursor-not-allowed disabled:opacity-40 ' +
-                        (device.tunnelStatus === 'connected'
-                          ? 'border-accent-red/30 bg-accent-red-dim/20 text-accent-red hover:bg-accent-red-dim/40'
-                          : 'border-accent-blue/30 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/15')}>
-                      {device.tunnelStatus === 'connected' ? <Unplug size={12} /> : <Link2 size={12} />}
-                      {deviceActionIds.has(device.id) ? t.deviceActionWorking
-                        : device.tunnelStatus === 'connected' ? t.disconnectDevice : t.retryDevice}
-                    </button>
-                    <button type="button" onClick={() => handleOpenDeviceSpeedTest(device.id)}
-                      disabled={device.tunnelStatus !== 'connected'}
-                      className="inline-flex items-center gap-1.5 rounded-sm border border-border-subtle bg-bg-primary px-2.5 py-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:border-accent-blue/50 hover:text-accent-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:cursor-not-allowed disabled:opacity-40">
-                      <Zap size={12} />
-                      {t.testDeviceSpeed}
-                    </button>
-                  </div>
-                </div>
-                {deviceActionErrors[device.id] && (
-                  <p role="alert" className="mt-2 text-[11px] text-accent-red">
-                    {t.deviceActionFailed}
-                  </p>
-                )}
-              </article>
+              <DeviceRow key={device.id} device={device} engineStatus={status}
+                busy={deviceActionIds.has(device.id)} actionFailed={Boolean(deviceActionErrors[device.id])}
+                t={t} language={language} onAction={(selected) => void handleDeviceTunnelAction(selected)}
+                onSpeed={handleOpenDeviceSpeedTest}/>
             ))}
             {devices.length === 0 && (
-              <div className="p-4 text-center text-xs text-text-muted">
+              <div className="rounded-md border border-dashed border-border-subtle bg-bg-primary p-4 text-center text-xs text-text-muted">
                 {adbError ? t.adbUnavailable : t.noDevice}
               </div>
             )}
           </div>
         </div>
 
-        <div className="pb-10">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-text-muted">
-              <Terminal size={12} /> {t.terminalLabel}
-            </div>
-            <button
-              onClick={onClearLogs}
-              disabled={logs.length === 0}
-              title={logs.length === 0 ? t.noLogsToClear : t.clear}
-              className="text-[10px] font-bold uppercase text-text-muted transition-colors hover:text-accent-red disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-muted"
-            >
-              {t.clear}
-            </button>
-          </div>
-          <div ref={logViewportRef} onScroll={handleLogScroll} className="custom-scrollbar h-48 overflow-y-auto rounded-sm border border-border-subtle bg-bg-primary p-3 font-mono text-[10px]">
-            {logs.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-text-muted italic">
-                {t.noLogsYet}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {logs.map((log, index) => (
-                  <div
-                    key={`${log.timestamp}-${index}`}
-                    className={`flex gap-2 ${log.type === 'stderr' ? 'text-accent-red' : 'text-text-secondary'}`}
-                  >
-                    <span className="shrink-0 opacity-50">[{log.timestamp}]</span>
-                    <span className="break-all">{log.message}</span>
-                  </div>
-                ))}
-
-              </div>
-            )}
-          </div>
+        <div className="pb-5">
+          <TerminalLog logs={logs} devices={devices} onClear={onClearLogs} t={t} language={language}/>
         </div>
       </div>
     </div>

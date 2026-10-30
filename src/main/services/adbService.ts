@@ -21,6 +21,9 @@ const DEVICE_DETAILS_TTL_MS = 30_000
 interface DeviceDetails {
   name: string
   battery?: string
+  batteryStatus?: 'charging' | 'full' | 'discharging' | 'unknown'
+  codename?: string
+  androidVersion?: string
 }
 
 interface CachedDeviceDetails extends DeviceDetails {
@@ -75,6 +78,15 @@ export function parseAdbDevices(stdout: string): AdbDevice[] {
 
 export function parseBatteryLevel(output: string): string | undefined {
   return output.match(/level:\s*(\d+)/i)?.[1]
+}
+
+/** Android status=2 charging, status=5 full; do not infer state only from percentage. */
+export function parseBatteryStatus(output: string): DeviceDetails['batteryStatus'] {
+  const status = Number(output.match(/^\s*status:\s*(\d+)/mi)?.[1])
+  if (status === 5) return 'full'
+  if (status === 2) return 'charging'
+  if (status === 3 || status === 4) return 'discharging'
+  return 'unknown'
 }
 
 export function parseTunnelTraffic(output: string): DeviceTraffic | undefined {
@@ -512,7 +524,7 @@ export class AdbService {
     const cached = this.detailsCache.get(deviceId)
 
     if (cached && cached.expiresAt > Date.now()) {
-      return { name: cached.name, battery: cached.battery }
+      return { name: cached.name, battery: cached.battery, batteryStatus: cached.batteryStatus, codename: cached.codename, androidVersion: cached.androidVersion }
     }
 
     try {
@@ -522,11 +534,25 @@ export class AdbService {
         this.execAdb(['-s', deviceId, 'shell', 'dumpsys', 'battery'], 3000)
       ])
 
+      // Optional properties are best-effort; failure must not hide an authorized device.
+      const extras = await Promise.allSettled([
+        this.execAdb(['-s', deviceId, 'shell', 'getprop', 'ro.product.device'], 3000),
+        this.execAdb(['-s', deviceId, 'shell', 'getprop', 'ro.build.version.release'], 3000)
+      ])
+      const optional = (index: number): string | undefined => {
+        const item = extras[index]
+        if (item.status !== 'fulfilled') return undefined
+        const value = item.value.trim()
+        return value && value !== 'unknown' && value.length <= 64 ? value : undefined
+      }
       const brand = capitalize(brandOutput.trim())
       const model = modelOutput.trim()
       const details: DeviceDetails = {
         name: `${brand} ${model}`.trim() || 'Android Device',
-        battery: parseBatteryLevel(batteryOutput)
+        battery: parseBatteryLevel(batteryOutput),
+        batteryStatus: parseBatteryStatus(batteryOutput),
+        codename: optional(0),
+        androidVersion: optional(1)
       }
 
       this.detailsCache.set(deviceId, {

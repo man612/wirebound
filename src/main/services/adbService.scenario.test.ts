@@ -34,7 +34,9 @@ describe('AdbService runtime scenarios', () => {
       if (command === 'devices') return 'List of devices attached\nABC123\tdevice\n'
       if (command.endsWith('getprop ro.product.brand')) return 'motorola\n'
       if (command.endsWith('getprop ro.product.model')) return 'moto g45 5G\n'
-      if (command.endsWith('dumpsys battery')) return 'level: 73\n'
+      if (command.endsWith('getprop ro.product.device')) return 'malmo\n'
+      if (command.endsWith('getprop ro.build.version.release')) return '15\n'
+      if (command.endsWith('dumpsys battery')) return 'status: 3\nlevel: 73\n'
       throw new Error(`Unexpected ADB command: ${command}`)
     })
     const service = new AdbService(paths, executor)
@@ -48,6 +50,9 @@ describe('AdbService runtime scenarios', () => {
         id: 'ABC123',
         name: 'Motorola moto g45 5G',
         battery: '73',
+        batteryStatus: 'discharging',
+        codename: 'malmo',
+        androidVersion: '15',
         status: 'device'
       }
     ])

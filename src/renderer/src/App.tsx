@@ -4,12 +4,15 @@ import Sidebar from './components/layout/Sidebar'
 import OnboardingScreen from './components/OnboardingScreen'
 import Dashboard from './components/views/Dashboard'
 import Settings from './components/views/Settings'
+import WorkspacePlaceholder from './components/views/WorkspacePlaceholder'
+import TerminalLog from './components/views/TerminalLog'
+import type { AppPage } from './pages'
 import { useAppVersion, useDevices, useDiagnostics, useGnirehtet, useSettings } from './hooks'
 import type { Language } from './i18n'
 import { translations } from './i18n'
 
 function App(): React.JSX.Element {
-  const [activePage, setActivePage] = useState<'dashboard' | 'settings'>('dashboard')
+  const [activePage, setActivePage] = useState<AppPage>('dashboard')
   const { status, logs, isLoading, start, stop, clearLogs } = useGnirehtet()
   const { devices, error: adbError } = useDevices()
   const { settings, updateSettings, loaded } = useSettings()
@@ -69,7 +72,7 @@ function App(): React.JSX.Element {
 
       {settings.onboardingCompleted && (
         <>
-          <Sidebar activePage={activePage} onNavigate={setActivePage} t={t} version={version} />
+          <Sidebar activePage={activePage} onNavigate={setActivePage} t={t} language={settings.language} version={version} />
           <main className="flex-grow relative overflow-hidden bg-bg-surface pt-8 theme-transition">
             <div key={activePage} className="h-full">
               {activePage === 'dashboard' && (
@@ -86,6 +89,19 @@ function App(): React.JSX.Element {
                   t={t}
                   language={settings.language}
                 />
+              )}
+              {activePage === 'logs' && (
+                <div className="flex h-full flex-col overflow-hidden bg-bg-surface">
+                  <div className="border-b border-border-subtle px-4 py-2 text-xs text-text-muted">
+                    Wirebound / <span className="text-text-primary">{settings.language === 'id' ? 'Log Aktivitas' : 'Activity Logs'}</span>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-hidden p-4">
+                    <TerminalLog logs={logs} devices={devices} onClear={clearLogs} t={t} language={settings.language} full />
+                  </div>
+                </div>
+              )}
+              {activePage !== 'dashboard' && activePage !== 'logs' && activePage !== 'settings' && (
+                <WorkspacePlaceholder page={activePage} language={settings.language} onDashboard={() => setActivePage('dashboard')}/>
               )}
               {activePage === 'settings' && (
                 <Settings

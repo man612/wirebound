@@ -10,6 +10,9 @@ export interface AdbDevice {
   id: string
   name: string
   battery?: string
+  batteryStatus?: 'charging' | 'full' | 'discharging' | 'unknown'
+  codename?: string
+  androidVersion?: string
   status: 'device' | 'offline' | 'unauthorized' | 'no permissions'
   tunnelStatus?: DeviceTunnelStatus
   traffic?: DeviceTraffic

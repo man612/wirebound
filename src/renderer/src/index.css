@@ -223,3 +223,104 @@ body {
     transition: none !important;
   }
 }
+
+/* Consistent, subtle desktop motion — paired with reduced-motion support below. */
+:root {
+  --motion-fast: 130ms;
+  --motion-normal: 190ms;
+  --motion-panel: 240ms;
+  --motion-ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+#root button {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease);
+}
+
+#root button:not(:disabled):active {
+  transform: scale(.985);
+}
+#root button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.motion-control:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+.motion-nav:hover:not(:disabled) {
+  transform: translateX(2px);
+}
+.motion-row {
+  transition: background-color var(--motion-normal) var(--motion-ease),
+              border-color var(--motion-normal) var(--motion-ease),
+              transform var(--motion-normal) var(--motion-ease);
+}
+.motion-row:hover {
+  transform: translateY(-1px);
+}
+.motion-enter {
+  animation: fadeSlideUp var(--motion-panel) var(--motion-ease) both;
+}
+
+/* Grid allows content height to move without JS measurements or content jumps. */
+.diagnostics-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: grid-template-rows var(--motion-panel) var(--motion-ease),
+              opacity var(--motion-normal) ease-out,
+              transform var(--motion-panel) var(--motion-ease);
+}
+.diagnostics-fold-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+}
+.diagnostics-fold-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.log-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 25px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  background: var(--bg-primary);
+}
+.log-tool:hover:not(:disabled), .log-tool-active {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.log-tool:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root button, .motion-control, .motion-nav, .motion-row,
+  .diagnostics-fold {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+  .motion-enter {
+    animation: none !important;
+  }
+  #root button:not(:disabled):active,
+  .motion-control:not(:disabled):hover,
+  .motion-nav:not(:disabled):hover,
+  .motion-row:hover {
+    transform: none !important;
+  }
+}
