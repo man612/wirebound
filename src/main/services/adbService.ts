@@ -21,6 +21,9 @@ const DEVICE_DETAILS_TTL_MS = 30_000
 interface DeviceDetails {
   name: string
   battery?: string
+  batteryStatus?: 'charging' | 'full' | 'discharging' | 'unknown'
+  codename?: string
+  androidVersion?: string
 }
 
 interface CachedDeviceDetails extends DeviceDetails {
@@ -75,6 +78,15 @@ export function parseAdbDevices(stdout: string): AdbDevice[] {
 
 export function parseBatteryLevel(output: string): string | undefined {
   return output.match(/level:\s*(\d+)/i)?.[1]
+}
+
+/** Android status=2 charging, status=5 full; do not infer state only from percentage. */
+export function parseBatteryStatus(output: string): DeviceDetails['batteryStatus'] {
+  const status = Number(output.match(/^\s*status:\s*(\d+)/mi)?.[1])
+  if (status === 5) return 'full'
+  if (status === 2) return 'charging'
+  if (status === 3 || status === 4) return 'discharging'
+  return 'unknown'
 }
 
 export function parseTunnelTraffic(output: string): DeviceTraffic | undefined {
@@ -271,7 +283,12 @@ export class AdbService {
     }
   }
 
-  public async getDiagnostics(engineStatus: ConnectionStatus): Promise<DiagnosticReport> {
+  public async getDiagnostics(
+    engineStatus: ConnectionStatus,
+    onProgress?: (completed: number, total: number) => void
+  ): Promise<DiagnosticReport> {
+    const total = 6
+    const progress = (completed: number): void => onProgress?.(completed, total)
     const checks: DiagnosticCheck[] = [
       {
         id: 'adbRuntime',
@@ -289,7 +306,9 @@ export class AdbService {
       }
     ]
 
+    progress(2)
     if (!existsSync(this.paths.adbExe)) {
+      progress(total)
       return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
     }
 
@@ -299,6 +318,7 @@ export class AdbService {
         .split(/\r?\n/)
         .map((line) => line.trim())
         .find((line) => line.startsWith('Version '))
+      progress(3)
       checks.push({
         id: 'adbQuery',
         status: 'pass',
@@ -310,14 +330,17 @@ export class AdbService {
         status: 'error',
         detail: readableError(error, 'ADB did not respond.')
       })
+      progress(total)
       return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
     }
 
     const snapshot = await this.getSnapshot()
     if (snapshot.error) {
       checks.push({ id: 'deviceAccess', status: 'error', detail: snapshot.error })
+      progress(total)
       return { generatedAt: new Date().toISOString(), engineStatus, checks, devices: [] }
     }
+    progress(4)
 
     checks.push({
       id: 'deviceAccess',
@@ -333,6 +356,7 @@ export class AdbService {
     )
     const readyDevices = devices.filter((device) => device.status === 'device')
 
+    progress(5)
     checks.push({
       id: 'androidVersion',
       status: readyDevices.length > 0 ? 'pass' : 'info',
@@ -370,6 +394,7 @@ export class AdbService {
               : 'The Wirebound engine is stopped.'
     })
 
+    progress(total)
     return { generatedAt: new Date().toISOString(), engineStatus, checks, devices }
   }
 
@@ -512,7 +537,7 @@ export class AdbService {
     const cached = this.detailsCache.get(deviceId)
 
     if (cached && cached.expiresAt > Date.now()) {
-      return { name: cached.name, battery: cached.battery }
+      return { name: cached.name, battery: cached.battery, batteryStatus: cached.batteryStatus, codename: cached.codename, androidVersion: cached.androidVersion }
     }
 
     try {
@@ -522,11 +547,25 @@ export class AdbService {
         this.execAdb(['-s', deviceId, 'shell', 'dumpsys', 'battery'], 3000)
       ])
 
+      // Optional properties are best-effort; failure must not hide an authorized device.
+      const extras = await Promise.allSettled([
+        this.execAdb(['-s', deviceId, 'shell', 'getprop', 'ro.product.device'], 3000),
+        this.execAdb(['-s', deviceId, 'shell', 'getprop', 'ro.build.version.release'], 3000)
+      ])
+      const optional = (index: number): string | undefined => {
+        const item = extras[index]
+        if (item.status !== 'fulfilled') return undefined
+        const value = item.value.trim()
+        return value && value !== 'unknown' && value.length <= 64 ? value : undefined
+      }
       const brand = capitalize(brandOutput.trim())
       const model = modelOutput.trim()
       const details: DeviceDetails = {
         name: `${brand} ${model}`.trim() || 'Android Device',
-        battery: parseBatteryLevel(batteryOutput)
+        battery: parseBatteryLevel(batteryOutput),
+        batteryStatus: parseBatteryStatus(batteryOutput),
+        codename: optional(0),
+        androidVersion: optional(1)
       }
 
       this.detailsCache.set(deviceId, {

@@ -203,3 +203,218 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--accent-blue);
 }
+
+/* Avoid non-essential movement for people requesting reduced motion in Windows. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up,
+  .animate-scale-in,
+  .animate-float,
+  .animate-shimmer,
+  .animate-page-enter,
+  .animate-dropdown,
+  .animate-modal-enter,
+  .animate-spin {
+    animation: none !important;
+  }
+
+  .theme-transition,
+  .state-morph,
+  .liquid-path {
+    transition: none !important;
+  }
+}
+
+/* Consistent, subtle desktop motion — paired with reduced-motion support below. */
+:root {
+  --motion-fast: 130ms;
+  --motion-normal: 190ms;
+  --motion-panel: 240ms;
+  --motion-ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+#root button {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease);
+}
+
+#root button:not(:disabled):active {
+  transform: scale(.985);
+}
+#root button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
+.motion-control:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+.motion-nav:hover:not(:disabled) {
+  /* Hover emphasis uses color only: a moving 100%-width row caused a phantom scrollbar. */
+  transform: none;
+}
+.motion-row {
+  transition: background-color var(--motion-normal) var(--motion-ease),
+              border-color var(--motion-normal) var(--motion-ease),
+              transform var(--motion-normal) var(--motion-ease);
+}
+.motion-row:hover {
+  transform: translateY(-1px);
+}
+.motion-enter {
+  animation: fadeSlideUp var(--motion-panel) var(--motion-ease) both;
+}
+
+/* Grid allows content height to move without JS measurements or content jumps. */
+.diagnostics-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: grid-template-rows var(--motion-panel) var(--motion-ease),
+              opacity var(--motion-normal) ease-out,
+              transform var(--motion-panel) var(--motion-ease);
+}
+.diagnostics-fold-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+}
+.diagnostics-fold-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.log-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 25px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  background: var(--bg-primary);
+}
+.log-tool:hover:not(:disabled), .log-tool-active {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.log-tool:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root button, .motion-control, .motion-nav, .motion-row,
+  .diagnostics-fold {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+  .motion-enter {
+    animation: none !important;
+  }
+  #root button:not(:disabled):active,
+  .motion-control:not(:disabled):hover,
+  .motion-nav:not(:disabled):hover,
+  .motion-row:hover {
+    transform: none !important;
+  }
+}
+
+/* Hover guidance is delayed for pointer users, instant for keyboard focus. */
+@keyframes tooltip-enter { from { opacity: 0; filter: blur(2px) } to { opacity: 1; filter: blur(0) } }
+.wirebound-tooltip { animation: tooltip-enter 170ms ease-out both; }
+
+.motion-label {
+  opacity: 0;
+  transform: translateY(4px) scale(.97);
+  transition: opacity 190ms ease, transform 210ms cubic-bezier(.2,.8,.2,1);
+  pointer-events: none;
+}
+.motion-label-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.motion-feedback {
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 240ms ease, transform 240ms ease;
+  pointer-events: none;
+}
+.motion-feedback-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.diagnostic-progress-shell {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 250ms cubic-bezier(.2,.8,.2,1), opacity 190ms ease;
+}
+.diagnostic-progress-shell > div { min-height: 0; overflow: hidden; }
+.diagnostic-progress-open { grid-template-rows: 1fr; opacity: 1; }
+.diagnostic-progress-fill { transition: width 220ms cubic-bezier(.2,.8,.2,1); }
+.motion-log-line { animation: tooltip-enter 170ms ease-out; }
+
+.wirebound-dialog-shell {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 240ms ease, visibility 240ms;
+}
+.wirebound-dialog-open { opacity: 1; visibility: visible; pointer-events: auto; }
+.wirebound-dialog-panel {
+  transform: translateY(12px) scale(.97);
+  opacity: 0;
+  transition: transform 260ms cubic-bezier(.2,.8,.2,1), opacity 230ms ease;
+}
+.wirebound-dialog-open .wirebound-dialog-panel { transform: none; opacity: 1; }
+
+::view-transition-old(root) { animation: wirebound-page-exit 130ms ease-in both; }
+::view-transition-new(root) { animation: wirebound-page-enter 210ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes wirebound-page-exit { to { opacity: 0; transform: translateY(-3px); } }
+@keyframes wirebound-page-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .wirebound-tooltip, .motion-log-line, ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
+  .motion-label, .motion-feedback, .diagnostic-progress-shell, .diagnostic-progress-fill,
+  .wirebound-dialog-shell, .wirebound-dialog-panel { transition: none !important; animation: none !important; }
+}
+
+.notice-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin: 0;
+  transition: grid-template-rows 250ms cubic-bezier(.2,.8,.2,1), opacity 200ms ease, margin 250ms ease;
+}
+.notice-fold > div { min-height: 0; overflow: hidden; }
+.notice-fold-open { grid-template-rows: 1fr; opacity: 1; }
+/* A collapsed flex item still consumes the parent's gap; neutralize that gap. */
+.notice-fold-closed { margin-bottom: -1rem; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .notice-fold { transition: none !important; } }
+
+.diagnostic-status-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 240ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease;
+}
+.diagnostic-status-fold > div { min-height: 0; overflow: hidden; }
+.diagnostic-status-open { grid-template-rows: 1fr; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .diagnostic-status-fold { transition: none !important; } }
+
+/* Scrollbars must never appear horizontally in the icon navigation. */
+aside nav { overflow-x: hidden; }
+
+.log-follow-paused:not(:disabled) {
+  border-color: var(--border-focus);
+  color: var(--accent-blue);
+  background: var(--bg-hover);
+}

@@ -6,6 +6,7 @@ import type {
   AppSettings,
   ConnectionStatus,
   DiagnosticReport,
+  DiagnosticProgress,
   LogEntry
 } from '../../../shared/types'
 
@@ -33,6 +34,8 @@ interface UseDiagnosticsResult {
   report?: DiagnosticReport
   isRunning: boolean
   error?: string
+  progress: DiagnosticProgress
+  attempt: number
   run: () => Promise<void>
 }
 
@@ -201,25 +204,63 @@ export function useDiagnostics(): UseDiagnosticsResult {
   const [report, setReport] = useState<DiagnosticReport | undefined>()
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  const [progress, setProgress] = useState<DiagnosticProgress>({ completed: 0, total: 6 })
+  const [attempt, setAttempt] = useState(0)
+  const progressQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const progressEpochRef = useRef(0)
+  const runInFlightRef = useRef(false)
+  useEffect(() => {
+    if (!hasApi()) return
+    return window.api.onDiagnosticsProgress((value) => {
+      if (Number.isInteger(value.completed) && Number.isInteger(value.total) && value.total === 6 && value.completed >= 0 && value.completed <= 6) {
+        // Real IPC checkpoints may arrive faster than one React paint. Queue them
+        // in order so the bar never starts in the middle or jumps backwards.
+        const epoch = progressEpochRef.current
+        progressQueueRef.current = progressQueueRef.current.then(() => new Promise<void>(resolve => {
+          window.setTimeout(() => {
+            if (progressEpochRef.current === epoch) {
+              setProgress(previous => value.completed > previous.completed ? value : previous)
+            }
+            resolve()
+          }, 200)
+        }))
+      }
+    })
+  }, [])
 
   const run = useCallback(async (): Promise<void> => {
+    if (runInFlightRef.current) return
     if (!hasApi()) {
       setError('Electron API is not available.')
       return
     }
 
+    runInFlightRef.current = true
+    progressEpochRef.current += 1
+    progressQueueRef.current = Promise.resolve()
+    setAttempt(value => value + 1)
     setIsRunning(true)
+    setProgress({ completed: 0, total: 6 })
     setError(undefined)
+    // Do not present an older successful scan as the result of a failed rerun.
+    setReport(undefined)
+    // Give the 0% frame time to paint before native milestones can arrive.
+    await new Promise<void>(resolve => window.setTimeout(resolve, 70))
     try {
-      setReport(await window.api.getDiagnostics())
+      const nextReport = await window.api.getDiagnostics()
+      await progressQueueRef.current
+      setReport(nextReport)
+      setProgress({ completed: 6, total: 6 })
     } catch (runError) {
+      await progressQueueRef.current
       setError(runError instanceof Error ? runError.message : 'Diagnostics failed.')
     } finally {
+      runInFlightRef.current = false
       setIsRunning(false)
     }
   }, [])
 
-  return { report, isRunning, error, run }
+  return { report, isRunning, error, progress, attempt, run }
 }
 
 export function useAppVersion(): string {
