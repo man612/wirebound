@@ -24,3 +24,9 @@ Wirebound is a **Windows-only** Electron/React desktop interface for Gnirehtet a
 - Record exactly what ran, on which branch/commit, what failed, and what remains unverified. Do not mark a Draft PR or an issue complete solely because code exists.
 - For GitHub Actions troubleshooting and the local Windows fallback, see `docs/CI_LOCAL_VALIDATION.md`. A failed workflow must be diagnosed from its actual step logs, not presumed to be a quota issue.
 - For active release blockers, see [issue #38](https://github.com/man612/wirebound/issues/38); for startup investigation, [issue #44](https://github.com/man612/wirebound/issues/44). Consult the live PR list for other ongoing work.
+
+## PR #67 integrated UX and Gnirehtet QA
+
+On the Draft [integration PR #67](https://github.com/man612/wirebound/pull/67), consult its current head, discussion and [round-4 owner UI audit](docs/qa/PR67_OWNER_UI_AUDIT_ROUND4_2026-10-30.md) before changing per-device Connect, the terminal, notice dismissal or diagnostics. The [combined-build Motorola acceptance](docs/qa/PR67_MOTOROLA_GUI_END_TO_END_2026-10-30.md) is evidence for the tested earlier package, not an automatic pass for a later head.
+
+The branch combines PR #50 UX and PR #63 lifecycle/native-log privacy; startup investigation PR #51 is **not** integrated. Preserve both engine lifecycle protection and stream-aware serial redaction. Do not quietly start all other phones when handling a single-device Connect. The special QA ADB-server port is not representative of Rust Gnirehtet `autorun`, which monitors the default server on 5037; see the [native QA checkpoint](docs/qa/GNIREHTET_MOTOROLA_NATIVE_QA_2026-10-29.md). Keep PR #67 Draft until its remaining exact-build device and UI verification is accepted.

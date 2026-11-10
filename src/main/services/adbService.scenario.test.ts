@@ -13,6 +13,22 @@ const paths: RuntimePaths = {
 }
 
 describe('AdbService runtime scenarios', () => {
+  it('emits real completed diagnostic checkpoints and reaches six of six', async () => {
+    const commands = vi.fn(async (args: string[]) => {
+      if (args.join(' ') === 'version') return 'Android Debug Bridge version 1.0.41\nVersion 37.0.1'
+      throw new Error('Unexpected command')
+    })
+    const service = new AdbService({ ...paths, adbExe: process.execPath, gnirehtetExe: process.execPath }, commands)
+    vi.spyOn(service, 'getSnapshot').mockResolvedValue({ devices: [] })
+    const stages: number[] = []
+    const report = await service.getDiagnostics('disconnected', (completed, total) => {
+      expect(total).toBe(6)
+      stages.push(completed)
+    })
+    expect(report.checks.length).toBe(6)
+    expect(stages).toEqual([2, 3, 4, 5, 6])
+  })
+
   it('keeps an unauthorized device visible instead of treating it as no device', async () => {
     const executor = vi.fn(async (args: string[]): Promise<string> => {
       if (args.join(' ') === 'devices') {
@@ -34,7 +50,9 @@ describe('AdbService runtime scenarios', () => {
       if (command === 'devices') return 'List of devices attached\nABC123\tdevice\n'
       if (command.endsWith('getprop ro.product.brand')) return 'motorola\n'
       if (command.endsWith('getprop ro.product.model')) return 'moto g45 5G\n'
-      if (command.endsWith('dumpsys battery')) return 'level: 73\n'
+      if (command.endsWith('getprop ro.product.device')) return 'malmo\n'
+      if (command.endsWith('getprop ro.build.version.release')) return '15\n'
+      if (command.endsWith('dumpsys battery')) return 'status: 3\nlevel: 73\n'
       throw new Error(`Unexpected ADB command: ${command}`)
     })
     const service = new AdbService(paths, executor)
@@ -48,6 +66,9 @@ describe('AdbService runtime scenarios', () => {
         id: 'ABC123',
         name: 'Motorola moto g45 5G',
         battery: '73',
+        batteryStatus: 'discharging',
+        codename: 'malmo',
+        androidVersion: '15',
         status: 'device'
       }
     ])

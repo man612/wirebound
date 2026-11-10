@@ -10,6 +10,9 @@ export interface AdbDevice {
   id: string
   name: string
   battery?: string
+  batteryStatus?: 'charging' | 'full' | 'discharging' | 'unknown'
+  codename?: string
+  androidVersion?: string
   status: 'device' | 'offline' | 'unauthorized' | 'no permissions'
   tunnelStatus?: DeviceTunnelStatus
   traffic?: DeviceTraffic
@@ -50,6 +53,7 @@ export interface AppSettings {
   autoStart: boolean
   launchAtLogin: boolean
   telemetryEnabled: boolean
+  showStatusNotices: boolean
   customDns: string
   theme: 'light' | 'dark'
   language: 'en' | 'id'
@@ -94,6 +98,8 @@ export interface DiagnosticSystemInfo {
   arch: string
 }
 
+export interface DiagnosticProgress { completed: number; total: number }
+
 export interface DiagnosticReport {
   generatedAt: string
   engineStatus: ConnectionStatus
@@ -114,7 +120,9 @@ export interface GnirehtetAPI {
   saveSettings: (settings: AppSettings) => Promise<AppSettings>
   getAppVersion: () => Promise<string>
   getDiagnostics: () => Promise<DiagnosticReport>
+  onDiagnosticsProgress: (callback: (progress: DiagnosticProgress) => void) => () => void
   exportSupportReport: (content: string) => Promise<SaveReportResult>
+  copySupportReport: (content: string) => Promise<ActionResult>
   checkForUpdates: () => Promise<UpdateCheckResult>
   getCrashTelemetryState: () => Promise<CrashTelemetryState>
   testSpeedOnDevice: (deviceId: string) => Promise<ActionResult>

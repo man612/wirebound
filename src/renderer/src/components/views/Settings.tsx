@@ -4,6 +4,7 @@ import CustomSelect from '../ui/CustomSelect'
 import icon from '../../assets/icon.png'
 import type { AppSettings, UpdateCheckResult } from '../../../../shared/types'
 import type { Translation } from '../../i18n'
+import { formatUiTimestamp } from '../../formatters'
 
 interface SettingsProps {
   settings: AppSettings
@@ -26,6 +27,23 @@ function isValidPort(value: string): boolean {
   return Number.isInteger(port) && port >= 1 && port <= 65535
 }
 
+function readUpdateTimestamp(key: string): number | undefined {
+  try {
+    const value = Number(window.localStorage.getItem(key))
+    return value > 0 && Number.isFinite(value) ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function saveUpdateTimestamp(key: string, value: number): void {
+  try {
+    window.localStorage.setItem(key, String(value))
+  } catch {
+    // The current view still records the timestamp if storage is unavailable.
+  }
+}
+
 export default function Settings({
   settings,
   updateSettings,
@@ -36,6 +54,12 @@ export default function Settings({
   const [portDraft, setPortDraft] = useState(settings.port)
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | undefined>()
   const [checkingUpdates, setCheckingUpdates] = useState(false)
+  const [lastUpdateAttempt, setLastUpdateAttempt] = useState<number | undefined>(
+    () => readUpdateTimestamp('wirebound.update.lastAttempt')
+  )
+  const [lastSuccessfulCheck, setLastSuccessfulCheck] = useState<number | undefined>(
+    () => readUpdateTimestamp('wirebound.update.lastSuccess')
+  )
   const [crashTelemetryAvailable, setCrashTelemetryAvailable] = useState(false)
 
   useEffect(() => {
@@ -62,9 +86,13 @@ export default function Settings({
   }
 
   const checkForUpdates = async (): Promise<void> => {
+    if (checkingUpdates) return
     setCheckingUpdates(true)
+    let succeeded = false
     try {
-      setUpdateCheck(await window.api.checkForUpdates())
+      const result = await window.api.checkForUpdates()
+      succeeded = result.success
+      setUpdateCheck(result)
     } catch (error) {
       setUpdateCheck({
         success: false,
@@ -72,6 +100,13 @@ export default function Settings({
         error: error instanceof Error ? error.message : 'Update check failed.'
       })
     } finally {
+      const finishedAt = Date.now()
+      setLastUpdateAttempt(finishedAt)
+      saveUpdateTimestamp('wirebound.update.lastAttempt', finishedAt)
+      if (succeeded) {
+        setLastSuccessfulCheck(finishedAt)
+        saveUpdateTimestamp('wirebound.update.lastSuccess', finishedAt)
+      }
       setCheckingUpdates(false)
     }
   }
@@ -244,6 +279,25 @@ export default function Settings({
             </div>
 
             <div className="group flex items-center justify-between gap-6 border-t border-border-subtle pt-4">
+              <div className="min-w-0">
+                <div className="text-text-primary transition-colors group-hover:text-accent-blue">
+                  {t.statusNoticesLabel}
+                </div>
+                <div className="text-xs text-text-muted">{t.statusNoticesDesc}</div>
+              </div>
+              <label className="relative inline-flex shrink-0 cursor-pointer items-center transition-transform active:scale-95">
+                <input
+                  type="checkbox"
+                  aria-label={t.statusNoticesLabel}
+                  checked={settings.showStatusNotices}
+                  onChange={(event) => update({ showStatusNotices: event.target.checked })}
+                  className="peer sr-only"
+                />
+                <div className="peer h-4 w-8 rounded-sm bg-bg-hover shadow-inner after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3.5 after:rounded-sm after:bg-white after:content-[''] after:transition-all peer-checked:bg-accent-blue peer-checked:after:translate-x-full" />
+              </label>
+            </div>
+
+            <div className="group flex items-center justify-between gap-6 border-t border-border-subtle pt-4">
               <div>
                 <div className="text-text-primary transition-colors group-hover:text-accent-blue">
                   {t.crashReportsLabel}
@@ -353,6 +407,16 @@ export default function Settings({
                       </div>
                     ) : (
                       <div className="mt-1 text-[10px] text-text-muted">{t.updateCheckDesc}</div>
+                    )}
+                    {lastUpdateAttempt !== undefined && (
+                      <div className="mt-1 text-[10px] text-text-muted">
+                        {lastSuccessfulCheck === lastUpdateAttempt ? t.lastUpdateChecked : t.lastUpdateAttempt}: {formatUiTimestamp(lastUpdateAttempt, settings.language)}
+                      </div>
+                    )}
+                    {lastSuccessfulCheck !== undefined && lastSuccessfulCheck !== lastUpdateAttempt && (
+                      <div className="mt-1 text-[10px] text-text-muted">
+                        {t.lastUpdateChecked}: {formatUiTimestamp(lastSuccessfulCheck, settings.language)}
+                      </div>
                     )}
                   </div>
 

@@ -37,6 +37,7 @@ export function normalizeSettings(value: unknown): AppSettings {
     autoStart: readBoolean(input.autoStart, DEFAULT_SETTINGS.autoStart),
     launchAtLogin: readBoolean(input.launchAtLogin, DEFAULT_SETTINGS.launchAtLogin),
     telemetryEnabled: readBoolean(input.telemetryEnabled, DEFAULT_SETTINGS.telemetryEnabled),
+    showStatusNotices: readBoolean(input.showStatusNotices, DEFAULT_SETTINGS.showStatusNotices),
     customDns: readString(input.customDns, DEFAULT_SETTINGS.customDns),
     theme,
     language,
