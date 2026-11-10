@@ -26,6 +26,7 @@ files:
   - '!bin/**'
   - '!src/*'
   - '!scripts/**'
+  - '!docs/**'
   - '!*.exe'
   - '!*.blockmap'
   - '!*.zip'
