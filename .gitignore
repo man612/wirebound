@@ -1,14 +1,30 @@
-node_modules
-dist
-out
-.DS_Store
+# Installed dependencies and generated output
+node_modules/
+dist/
+out/
+coverage/
+*.tsbuildinfo
 .eslintcache
+.vite/
+.vitest/
+
+# Local development and QA profiles (may contain private device/settings data)
+qa-profile/
+qa-profiles/
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Local editor, operating-system and build artifacts
+.DS_Store
+.vscode/
 *.log*
 *.exe
 *.zip
 *.7z
-.vscode/
 
+# Pinned runtimes are downloaded and verified at build time
 bin/platform-tools/**
 bin/gnirehtet-rust-win64/**
 bin/.runtime-versions
