@@ -46,6 +46,7 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
   const jumpingRef = useRef(false)
   const empty = logs.length === 0
   const unread = empty || (following && !detached) ? 0 : Math.max(0, logs.length - lastSeen)
+  const jumpDisabled = empty || (following && !detached)
   const safeText = useMemo(() => renderSafeLogLines(logs, devices), [logs, devices])
   const visibleLogs = filter === 'errors' ? logs.filter(e => e.type === 'stderr') : logs
 
@@ -119,9 +120,13 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
       event.currentTarget.scrollHeight > event.currentTarget.clientHeight) markDetached()
   }
   const onScroll = (event: React.UIEvent<HTMLDivElement>): void => {
+    if (jumpingRef.current || empty) return
     const el = event.currentTarget
-    if (el.scrollHeight - el.scrollTop - el.clientHeight <= 8 && detachedRef.current && !jumpingRef.current) {
-      markAtBottom()
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 8
+    if (atBottom) {
+      if (detachedRef.current) markAtBottom()
+    } else if (el.scrollHeight > el.clientHeight + 8 && !detachedRef.current) {
+      markDetached()
     }
   }
   const copyLogs = async (): Promise<void> => {
@@ -180,7 +185,7 @@ export default function TerminalLog({ logs, devices, onClear, t, language, full 
             </button>
           </Tooltip>
           <Tooltip text={id ? 'Lompat halus ke log paling baru' : 'Smoothly jump to the latest log'}>
-            <button type="button" disabled={empty} className="motion-control log-tool" onClick={jumpToLatest}
+            <button type="button" disabled={jumpDisabled} className="motion-control log-tool" onClick={jumpToLatest}
               aria-label={id ? 'Ke log terbaru' : 'Jump to latest'}><ListEnd size={15}/></button>
           </Tooltip>
           <Tooltip text={id ? 'Salin log tersamarkan' : 'Copy redacted logs'}>

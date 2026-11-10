@@ -53,6 +53,7 @@ export interface AppSettings {
   autoStart: boolean
   launchAtLogin: boolean
   telemetryEnabled: boolean
+  showStatusNotices: boolean
   customDns: string
   theme: 'light' | 'dark'
   language: 'en' | 'id'

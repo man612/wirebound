@@ -30,8 +30,6 @@ import TerminalLog from './TerminalLog'
 import ConfirmDialog from '../ui/ConfirmDialog'
 import Tooltip from '../ui/Tooltip'
 
-let dashboardHasMountedOnce = false
-
 interface DashboardProps {
   status: ConnectionStatus
   isLoading: boolean
@@ -41,6 +39,8 @@ interface DashboardProps {
   adbError?: string
   logs: LogEntry[]
   onClearLogs: () => void
+  showStatusNotice: boolean
+  onDismissStatusNotice: () => void
   diagnostics: {
     report?: DiagnosticReport
     isRunning: boolean
@@ -194,6 +194,8 @@ export default function Dashboard({
   logs,
   onClearLogs,
   diagnostics,
+  showStatusNotice,
+  onDismissStatusNotice,
   t,
   language
 }: DashboardProps): React.JSX.Element {
@@ -208,13 +210,7 @@ export default function Dashboard({
   const manuallyToggledRef = useRef(false)
   const rerunLockRef = useRef(false)
   const acknowledgedRerunRef = useRef(0)
-  const initialRevealScheduledRef = useRef(false)
-  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(() => {
-    const initial = typeof window === 'undefined' || !dashboardHasMountedOnce
-    dashboardHasMountedOnce = true
-    return initial
-  })
-  const [diagnosticsManuallyToggled, setDiagnosticsManuallyToggled] = useState(false)
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false)
   const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<'running' | 'finished' | 'failed' | 'issues' | null>(null)
   const [rerunCycle, setRerunCycle] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'success' | 'error'>('idle')
@@ -227,8 +223,7 @@ export default function Dashboard({
   const deviceActionLockRef = useRef<Set<string>>(new Set())
   const [deviceActionIds, setDeviceActionIds] = useState<Set<string>>(() => new Set())
   const [deviceActionErrors, setDeviceActionErrors] = useState<Record<string, boolean>>({})
-  const [dismissedNoticeTone, setDismissedNoticeTone] = useState<string | null>(null)
-  const noticeVisible = dismissedNoticeTone !== setupState.tone
+  const noticeVisible = showStatusNotice
   const hasFailedChecks = hasFailedDiagnosticChecks(diagnostics.report)
   const checkCount = diagnostics.report?.checks.filter(check => check.status !== 'info').length ?? 0
   const passedCount = diagnostics.report?.checks.filter(check => check.status === 'pass').length ?? 0
@@ -236,36 +231,10 @@ export default function Dashboard({
   const statusMessageVisible = diagnostics.isRunning || diagnosticsFeedback !== null || copyState === 'success' || copyState === 'error'
   const progressPercent = diagnostics.progress.total > 0
     ? Math.round(100 * diagnostics.progress.completed / diagnostics.progress.total) : 0
-  const diagnosticsVisible =
-    diagnosticsExpanded || (Boolean(diagnostics.error) && !diagnosticsManuallyToggled)
+  const diagnosticsVisible = diagnosticsExpanded
 
-  // A returning user has no cached diagnostic report: perform one real scan.
-  // Never run it again on ordinary device polling or dashboard re-renders.
-  useEffect(() => {
-    if (!diagnostics.report && !diagnostics.isRunning && !diagnostics.error) {
-      void diagnostics.run()
-    }
-  }, [diagnostics.report, diagnostics.isRunning, diagnostics.error, diagnostics.run])
-
-  // Start the brief reveal AFTER the real scan finishes, not while it is pending.
-  // A failed scan stays visible; user-driven disclosure always wins.
-  useEffect(() => {
-    if (
-      initialRevealScheduledRef.current ||
-      diagnostics.isRunning ||
-      (!diagnostics.report && !diagnostics.error)
-    ) return
-
-    initialRevealScheduledRef.current = true
-    // An executed scan may complete successfully yet report an actual failed
-    // runtime/ADB check; do not hide those details automatically.
-    if (diagnostics.error || hasFailedChecks || manuallyToggledRef.current) return
-
-    collapseTimerRef.current = window.setTimeout(() => {
-      if (!manuallyToggledRef.current) setDiagnosticsExpanded(false)
-      collapseTimerRef.current = null
-    }, 2600)
-  }, [diagnostics.report, diagnostics.isRunning, diagnostics.error, hasFailedChecks])
+  // The startup scan is owned by App, never by this navigable view.
+  // Keep detailed results collapsed until the user opens them or runs a scan.
 
   useEffect(() => () => {
     if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
@@ -306,7 +275,6 @@ export default function Dashboard({
 
   const handleToggleDiagnostics = (): void => {
     manuallyToggledRef.current = true
-    setDiagnosticsManuallyToggled(true)
     if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
     collapseTimerRef.current = null
     setDiagnosticsExpanded(!diagnosticsVisible)
@@ -316,7 +284,6 @@ export default function Dashboard({
     if (rerunLockRef.current || diagnostics.isRunning) return
     rerunLockRef.current = true
     manuallyToggledRef.current = false
-    setDiagnosticsManuallyToggled(false)
     if (collapseTimerRef.current !== null) window.clearTimeout(collapseTimerRef.current)
     collapseTimerRef.current = null
     setDiagnosticsExpanded(true)
@@ -518,7 +485,7 @@ export default function Dashboard({
             )}
           </div>
           {(
-            <button type="button" onClick={() => setDismissedNoticeTone(setupState.tone)}
+            <button type="button" onClick={onDismissStatusNotice}
               aria-label={t.dismissNotice}
               className="ml-auto shrink-0 rounded-sm p-1 text-text-muted hover:bg-bg-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
               <X size={14} />
@@ -541,12 +508,12 @@ export default function Dashboard({
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
               <button
                 onClick={() => void handleCopyDiagnostics()}
                 disabled={!diagnostics.report || copyState === 'copying'}
                 title={t.copyReportHelp}
-                className="motion-control relative inline-flex h-7 w-[112px] items-center justify-center rounded-md border border-border-subtle bg-bg-primary px-1.5 text-[10px] font-medium text-text-secondary hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+                className="motion-control relative inline-flex h-7 w-[100px] items-center justify-center rounded-md border border-border-subtle bg-bg-primary px-1.5 text-[10px] font-medium text-text-secondary hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${copyState === 'idle' || copyState === 'error' ? 'motion-label-visible' : ''}`}><ClipboardCopy size={12} />{t.copyReport}</span>
                 <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${copyState === 'copying' ? 'motion-label-visible' : ''}`}><RefreshCw size={12} className="animate-spin" />{t.copyingReport}</span>
@@ -555,7 +522,7 @@ export default function Dashboard({
               <button
                 onClick={() => void handleExportDiagnostics()}
                 disabled={!diagnostics.report}
-                className="motion-control relative inline-flex h-7 w-[110px] items-center justify-center rounded-md border border-border-subtle bg-bg-primary px-1.5 text-[10px] font-medium text-text-secondary hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+                className="motion-control relative inline-flex h-7 w-[100px] items-center justify-center rounded-md border border-border-subtle bg-bg-primary px-1.5 text-[10px] font-medium text-text-secondary hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${!reportExported ? 'motion-label-visible' : ''}`}><Download size={12}/>{t.exportReport}</span>
                 <span className={`motion-label absolute inset-0 flex items-center justify-center gap-1.5 ${reportExported ? 'motion-label-visible' : ''}`}><CheckCircle2 size={12}/>{t.reportExported}</span>
@@ -563,16 +530,17 @@ export default function Dashboard({
               <button
                 onClick={() => void handleRerunDiagnostics()}
                 disabled={diagnostics.isRunning}
-                className="inline-flex items-center gap-1.5 rounded-sm border border-accent-blue/30 bg-accent-blue/10 px-2.5 py-1 text-[10px] font-semibold text-accent-blue transition-colors hover:bg-accent-blue/15 disabled:opacity-50"
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-accent-blue/30 bg-accent-blue/10 px-2 py-1 text-[10px] font-semibold text-accent-blue transition-colors hover:bg-accent-blue/15 disabled:opacity-50"
               >
                 <RefreshCw size={12} className={diagnostics.isRunning ? 'motion-safe:animate-spin' : ''} />
                 {diagnostics.report ? t.rerunDiagnostics : t.runDiagnostics}
               </button>
               <button type="button" onClick={handleToggleDiagnostics}
                 aria-expanded={diagnosticsVisible} aria-controls="wirebound-diagnostic-details"
-                className="motion-control inline-flex h-7 w-[132px] items-center justify-center gap-1 rounded-md border border-border-subtle bg-bg-primary px-2 text-[10px] font-medium text-text-secondary hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
-                <ChevronRight size={13} className={`transition-transform duration-200 ${diagnosticsVisible ? 'rotate-90' : ''}`} />
-                {diagnosticsVisible ? t.diagnosticsHide : t.diagnosticsShow}
+                title={diagnosticsVisible ? t.diagnosticsHide : t.diagnosticsShow}
+                aria-label={diagnosticsVisible ? t.diagnosticsHide : t.diagnosticsShow}
+                className="motion-control inline-flex h-7 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-bg-primary text-text-secondary hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
+                <ChevronRight size={14} className={`transition-transform duration-200 ${diagnosticsVisible ? 'rotate-90' : ''}`} />
               </button>
             </div>
           </div>
@@ -625,13 +593,13 @@ export default function Dashboard({
           )}
           {diagnostics.report && (
             <>
-              <div className={`mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3 ${diagnostics.isRunning ? 'opacity-65' : ''}`}>
+              <div className={`mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3 ${diagnostics.isRunning ? 'opacity-65' : ''}`}>
                 {diagnostics.report.checks.map((check) => (
                   <div
                     key={check.id}
-                    className="rounded-sm border border-border-subtle bg-bg-primary p-2.5"
+                    className="min-w-0 rounded-sm border border-border-subtle bg-bg-primary px-2 py-1.5"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-1.5">
                       <span
                         className={`h-2 w-2 rounded-full ${
                           check.status === 'pass'
@@ -643,12 +611,12 @@ export default function Dashboard({
                                 : 'bg-accent-blue'
                         }`}
                       />
-                      <span className="text-[11px] font-semibold text-text-primary">
+                      <span className="truncate text-[10px] font-semibold text-text-primary">
                         {getDiagnosticLabel(check.id, t)}
                       </span>
                     </div>
                     {check.detail && (
-                      <p className="mt-1 break-words text-[10px] leading-relaxed text-text-muted">
+                      <p title={check.detail} className="mt-0.5 truncate text-[9px] leading-tight text-text-muted">
                         {check.detail}
                       </p>
                     )}
@@ -661,7 +629,7 @@ export default function Dashboard({
                   <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-text-muted">{t.diagnosticDevices}</div>
                   <div className="space-y-1">
                     {diagnostics.report.devices.map((device) => (
-                      <div key={device.id} className="motion-row flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border-subtle bg-bg-primary px-2.5 py-2 text-[10px]">
+                      <div key={device.id} className="motion-row flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-md border border-border-subtle bg-bg-primary px-2 py-1.5 text-[10px]">
                         <strong className="min-w-0 flex-[1_1_150px] truncate text-text-primary" title={device.name}>{device.name || "--"}</strong>
                         <span className="text-text-secondary">{device.androidVersion ? "Android " + device.androidVersion + " · API " + (device.apiLevel ?? "?") : "--"}</span>
                         <span className="text-text-secondary">ADB {getDeviceStatusLabel(device.status, t)}</span>

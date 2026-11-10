@@ -15,6 +15,7 @@ describe('normalizeSettings', () => {
         autoStart: true,
         launchAtLogin: true,
         telemetryEnabled: true,
+        showStatusNotices: false,
         customDns: '9.9.9.9',
         theme: 'light',
         language: 'id',
@@ -26,11 +27,18 @@ describe('normalizeSettings', () => {
       autoStart: true,
       launchAtLogin: true,
       telemetryEnabled: true,
+      showStatusNotices: false,
       customDns: '9.9.9.9',
       theme: 'light',
       language: 'id',
       onboardingCompleted: true
     })
+  })
+
+  it('shows notices by default for existing installations without the new preference', () => {
+    expect(normalizeSettings({ onboardingCompleted: true }).showStatusNotices).toBe(true)
+    expect(normalizeSettings({ showStatusNotices: 'false' }).showStatusNotices).toBe(true)
+    expect(normalizeSettings({ showStatusNotices: false }).showStatusNotices).toBe(false)
   })
 
   it('repairs invalid enum and port values', () => {

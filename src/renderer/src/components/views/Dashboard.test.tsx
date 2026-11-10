@@ -4,7 +4,7 @@ import type { AdbDevice, ConnectionStatus, DiagnosticCheck, LogEntry } from '../
 import { translations } from '../../i18n'
 import Dashboard from './Dashboard'
 
-function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = [], checks: DiagnosticCheck[] = [], status: ConnectionStatus = 'disconnected'): string {
+function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = [], checks: DiagnosticCheck[] = [], status: ConnectionStatus = 'disconnected', showStatusNotice = true): string {
   return renderToStaticMarkup(
     <Dashboard
       status={status}
@@ -14,6 +14,8 @@ function renderDashboard(devices: AdbDevice[], logs: LogEntry[] = [], checks: Di
       devices={devices}
       logs={logs}
       onClearLogs={() => {}}
+      showStatusNotice={showStatusNotice}
+      onDismissStatusNotice={() => {}}
       diagnostics={{
         isRunning: false,
         progress: { completed: 6, total: 6 },
@@ -84,9 +86,17 @@ describe('Dashboard markup regressions', () => {
     expect(active).toContain('Stop Connection')
   })
 
-  it('renders the diagnostic disclosure with accessible expanded state', () => {
+  it('starts with diagnostics collapsed, with an accessible icon-only disclosure', () => {
     const rendered = renderDashboard([])
-    expect(rendered).toContain('aria-expanded="true"')
+    expect(rendered).toContain('aria-expanded="false"')
+    expect(rendered).toContain('aria-label="Show diagnostics"')
     expect(rendered).toContain('aria-controls="wirebound-diagnostic-details"')
+    expect(rendered).toContain('diagnostics-fold ')
+  })
+
+  it('can hide the whole status notice independently of its changing tone', () => {
+    const hidden = renderDashboard([], [], [], 'connected', false)
+    expect(hidden).toContain('notice-fold-closed')
+    expect(hidden).not.toContain('notice-fold-open')
   })
 })

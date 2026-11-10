@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoStart: false,
   launchAtLogin: false,
   telemetryEnabled: false,
+  showStatusNotices: true,
   customDns: '',
   theme: 'dark',
   language: 'en',

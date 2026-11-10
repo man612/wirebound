@@ -279,6 +279,25 @@ export default function Settings({
             </div>
 
             <div className="group flex items-center justify-between gap-6 border-t border-border-subtle pt-4">
+              <div className="min-w-0">
+                <div className="text-text-primary transition-colors group-hover:text-accent-blue">
+                  {t.statusNoticesLabel}
+                </div>
+                <div className="text-xs text-text-muted">{t.statusNoticesDesc}</div>
+              </div>
+              <label className="relative inline-flex shrink-0 cursor-pointer items-center transition-transform active:scale-95">
+                <input
+                  type="checkbox"
+                  aria-label={t.statusNoticesLabel}
+                  checked={settings.showStatusNotices}
+                  onChange={(event) => update({ showStatusNotices: event.target.checked })}
+                  className="peer sr-only"
+                />
+                <div className="peer h-4 w-8 rounded-sm bg-bg-hover shadow-inner after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3.5 after:rounded-sm after:bg-white after:content-[''] after:transition-all peer-checked:bg-accent-blue peer-checked:after:translate-x-full" />
+              </label>
+            </div>
+
+            <div className="group flex items-center justify-between gap-6 border-t border-border-subtle pt-4">
               <div>
                 <div className="text-text-primary transition-colors group-hover:text-accent-blue">
                   {t.crashReportsLabel}

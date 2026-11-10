@@ -18,17 +18,17 @@ function App(): React.JSX.Element {
   const { devices, error: adbError } = useDevices()
   const { settings, updateSettings, loaded } = useSettings()
   const diagnostics = useDiagnostics()
-  const previousSettledStatusRef = useRef(status)
+  const startupDiagnosticsStarted = useRef(false)
+  const [statusNoticeDismissed, setStatusNoticeDismissed] = useState(false)
   const version = useAppVersion()
 
-  // The diagnostic report is a snapshot. Refresh after real connection changes.
+  // Run a single startup scan for returning users. Dashboard navigation and
+  // connection changes must not start new scans; Run Again is always explicit.
   useEffect(() => {
-    if (status !== 'connected' && status !== 'disconnected' && status !== 'error') return
-    if (previousSettledStatusRef.current === status) return
-    previousSettledStatusRef.current = status
-    const timer = window.setTimeout(() => { void diagnostics.run() }, status === 'connected' ? 1800 : 450)
-    return () => window.clearTimeout(timer)
-  }, [status, diagnostics.run])
+    if (!loaded || !settings.onboardingCompleted || startupDiagnosticsStarted.current) return
+    startupDiagnosticsStarted.current = true
+    if (!diagnostics.report && !diagnostics.isRunning) void diagnostics.run()
+  }, [loaded, settings.onboardingCompleted, diagnostics.report, diagnostics.isRunning, diagnostics.run])
   const t = translations[(settings?.language as Language) || 'en']
 
   const navigate = (next: AppPage): void => {
@@ -104,6 +104,8 @@ function App(): React.JSX.Element {
                   logs={logs}
                   onClearLogs={clearLogs}
                   diagnostics={diagnostics}
+                  showStatusNotice={settings.showStatusNotices && !statusNoticeDismissed}
+                  onDismissStatusNotice={() => setStatusNoticeDismissed(true)}
                   t={t}
                   language={settings.language}
                 />
