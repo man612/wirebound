@@ -1,33 +1,26 @@
-# Wirebound — agent operational notes
+# Wirebound contributor and coding-agent guide
 
-Read [docs/CI_LOCAL_VALIDATION.md](docs/CI_LOCAL_VALIDATION.md) before interpreting or rerunning GitHub Actions. Keep incident notes dated and evidence-based.
+Wirebound is a **Windows-only** Electron/React desktop interface for Gnirehtet and ADB. Prefer small, verified fixes over speculative rewrites. The source of truth is the actual code, the current GitHub issue/PR state, and observed test results—not dated chat summaries or historical QA plans.
 
-- On 2026-10-20, the maintainer reported exhausting monthly included Actions usage on their account, with a reset expected early November. This is a **reported, temporary account condition**, not proof Wirebound's public Windows runner jobs are billable or blocked.
-- **Do not call every red check a quota failure.** Standard GitHub-hosted runners in public repos are free. When a workflow executed steps, inspect the actual log. The Oct 12/19 runtime-watch errors were PowerShell version-parser errors, not observed billing denials.
-- Prefer the local PowerShell command documented in docs/CI_LOCAL_VALIDATION.md on a clean Windows checkout when hosted Actions are genuinely unavailable. Clearly identify local validation; do not claim it is GitHub CI.
-- Do not attach a personal workstation as a persistent self-hosted runner on this public repository. Avoid merging dependency updates that fail compatibility tests or using forced peer dependencies to hide conflicts.
-- Keep Windows/Android real-device validation separate from successful builds. Do not release untested feature claims.
-- As of 2026-10-20 the maintainer has **one** Android phone. Physical two-device testing is explicitly waived for v1.2; do not repeatedly request another phone or claim multi-device hardware validation. Continue scenario tests and describe this limitation in release notes. Source of truth: docs/V1_2_RELEASE_READINESS.md and issue #38.
+## Before editing
 
-## Open v1.2 UI/UX feedback — 2026-10-20
+- Inspect the target branch, `git status`, and related open issues/PRs. The `main` branch is not automatically equivalent to an unmerged feature branch or a released installer.
+- Read `README.md`, `docs/V1_2_RELEASE_READINESS.md`, and the relevant tests. Hardware observations and synthetic tests are different kinds of evidence.
+- Do not change pinned ADB/Gnirehtet binaries, runtime checksums, dependency versions, or supported platform as incidental cleanup.
+- Preserve existing user settings, local profiles, and any active Android VPN/USB session. Use an isolated QA profile and build; do not replace the normal installed app during testing.
 
-- **Read [issue #48](https://github.com/man612/wirebound/issues/48) and [the detailed UX audit](docs/UX_DASHBOARD_AUDIT_2026-10-20.md) before changing onboarding, Dashboard, Settings, device lists or diagnostics.** These are 10 real user-observed defects and design requests; do not claim they are already fixed because this documentation exists.
-- P0: onboarding Light mode live preview; malformed device-detail separators and localized date; preserve dashboard scroll position on log updates; responsive Android list without horizontal scrollbar; visible copy-report feedback; disable empty-log Clear.
-- P1: briefly auto-reveal then collapse diagnostics without overriding manual actions; rerun progress with truthful checks and temporary reveal; compact dismissible ready banner; show accurate last check date/time/seconds for updates.
-- Existing source contains the log-scroll cause in Dashboard.tsx (`scrollIntoView` on logs), a `min-w-[920px]` device table, local-only onboarding theme state, and corrupted separators in diagnostic details. Confirm actual code and tests instead of blindly redesigning.
-- Preserve real ADB/VPN status, true cumulative TUN RX/TX counts, translation, keyboard accessibility, Dark/Light behavior and reduced-motion preferences. Do not fake scanning or force scrolling to logs.
-- Document any before/after screenshots only after masking Android device serial/IDs. The maintainer has one physical phone; dual-phone hardware testing is waived.
-- Close/check off each item in #48 only after implementation, tests, and a linked merged PR. Keep GitHub release readiness (#38) separate from these UX requirements.
+## Runtime invariants
 
-## Issue #56 ADB log privacy / cleanup-count audit — 2026-10-24
+- Never kill the shared ADB server or remove reverse mappings owned by other apps. Clean up only Wirebound's Gnirehtet resources, with the appropriate device target.
+- Do not infer Android VPN connectivity from a lingering process alone. Distinguish ADB authorization, relay state, VPN state, and independently tested internet access.
+- RX/TX values must come from observed Android TUN counters. Never fabricate traffic or claim they represent transfer speed.
+- Limit sensitive identifiers in logs and support reports. Do not upload real serials or personal logs to public issues or screenshots.
+- When changing the Gnirehtet lifecycle, inspect the target branch for existing Start/Stop race safeguards and preserve them. Validate cancellation, late child exits, and per-device isolation; issue #53 fixes may still be in an unmerged PR.
 
-- Read [issue #56](https://github.com/man612/wirebound/issues/56) and [the exact offline fix/QA handoff](docs/qa/ISSUE56_ADB_PRIVACY_CLEANUP_CHECKPOINT_2026-10-24.md) before touching ADB warning logs, `stopAllClients()` or Android client cleanup semantics.
-- Proposed isolated branch masks the current Android device ID in selected `console.warn` calls and counts successful `am force-stop` **commands**, not previously active clients. This is **not** proof a physical VPN ended or all native process/renderer logs are redacted. The two native Vitest fixtures are written but unrun; only 7/7 source-method JavaScript assertions passed without hardware.
-- Do not alter shared/global ADB or another app's reverse mapping; preserve `localabstract:gnirehtet`-only cleanup. The Gnirehtet lifecycle fix is separately proposed in Draft PR #55; this branch must not silently merge it or modify user Windows installations. Current Windows availability is not confirmed before roughly Tue 2026-10-27 09:00 WIB.
+## Verification and delivery
 
-## Safety audit: concurrent Gnirehtet lifecycle — 2026-10-24
-
-- Read [issue #53](https://github.com/man612/wirebound/issues/53) and [the offline ADB/Gnirehtet lifecycle safety audit](docs/qa/GNIREHTET_LIFECYCLE_SAFETY_AUDIT_2026-10-24.md) before editing `gnirehtetService.ts`, its process events, device cleanup, or start/stop sequencing.
-- Three races were reproduced by executing the original method bodies with fake dependencies (concurrent Start spawns twice; Stop during pending Start allows a late spawn; stale child `close` after a timed-out Stop dispatches unexpected-exit cleanup). These are **isolated JavaScript control-flow reproductions**, not live Windows/USB proof. Do not release or claim they are fixed; add deterministic native Vitest regressions and validate actual hardware before production changes.
-- Do not kill global/shared ADB or other applications' reverse mappings. Preserve masked structured reports and investigate raw device IDs in console/native subprocess logs separately. PR #50 UX and PR #51 startup remain separate and Draft.
-- The Windows QA computer is expected to be offline until roughly Tuesday 2026-10-27 09:00 WIB; do not poll repeatedly, use the normal user profile, install over the user's application, or interpret a project chat's memory as source-of-truth.
+- For a code change, run relevant tests and, where feasible, `npm run lint -- --no-cache`, `npm run typecheck`, `npm test`, and `npm run build`. Windows package changes also need a package smoke test.
+- Real USB/VPN/network and tray/quit behavior require **physical QA**; green CI or mocked renderer interactions cannot prove them. The project currently validates with one real phone; a simultaneous two-phone hardware test is not a v1.2 release gate.
+- Record exactly what ran, on which branch/commit, what failed, and what remains unverified. Do not mark a Draft PR or an issue complete solely because code exists.
+- For GitHub Actions troubleshooting and the local Windows fallback, see `docs/CI_LOCAL_VALIDATION.md`. A failed workflow must be diagnosed from its actual step logs, not presumed to be a quota issue.
+- For active release blockers, see [issue #38](https://github.com/man612/wirebound/issues/38); for startup investigation, [issue #44](https://github.com/man612/wirebound/issues/44). Consult the live PR list for other ongoing work.

@@ -28,7 +28,7 @@ The user requests a focused UX/UI revision, **not a wholesale redesign of the Wi
 - The dashboard's `Bersihkan` button invokes `onClearLogs` even if `logs.length === 0`.
 - `src/renderer/src/components/views/Settings.tsx` tracks `updateCheck` and `checkingUpdates` but does not record/display the exact last attempt/completion timestamp.
 - `src/renderer/src/index.css` already defines a `.custom-scrollbar` style, but the device-list scrolling wrapper does not apply it; the preferred fix is removing horizontal scrolling entirely.
-- `src/renderer/src/components/terminal/TerminalLog.tsx` contains a separate scrolling implementation; **the currently rendered dashboard's log is directly in Dashboard.tsx**, so fix the active component instead of an unused duplicate.
+- **Historical finding (2026-10-20):** an unused `src/renderer/src/components/terminal/TerminalLog.tsx` duplicate existed alongside the active dashboard log implementation. That unused file was removed during repository hygiene on 2026-11-10; subsequent fixes should inspect the actual current component rather than relying on this historical path.
 
 ## P0 — correctness / broken interactions / disruptive layout
 
