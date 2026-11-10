@@ -1,11 +1,9 @@
 # Wirebound
 
-![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows)
-![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)
-![Electron](https://img.shields.io/badge/Electron-44.x-47848F?style=for-the-badge&logo=electron)
-![React](https://img.shields.io/badge/React-19.x-61DAFB?style=for-the-badge&logo=react)
+![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows)
+![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)
 
-Wirebound is a Windows desktop GUI for [Gnirehtet](https://github.com/Genymobile/gnirehtet). It lets an Android device use a Windows PC's internet connection over USB without root access.
+Wirebound is a Windows desktop app for [Gnirehtet](https://github.com/Genymobile/gnirehtet). It lets an Android device use a Windows PC's internet connection over USB without root access.
 
 Wirebound handles device detection, Gnirehtet process lifecycle, DNS and relay configuration, connection state, logs, and common ADB failure states so users do not need to memorize terminal commands.
 
@@ -26,15 +24,15 @@ A `Connected` state means the desktop relay is running and a Gnirehtet client is
 
 ## Features
 
-- **Guided reverse tethering** â€” Start and stop the Gnirehtet relay from a desktop UI.
-- **ADB-aware device status** â€” Distinguishes ready, unauthorized, offline, no-access, and ADB-unavailable states.
-- **Connection state verification** â€” `Connected` requires both the PC relay process and an active Gnirehtet Android client.
-- **DNS and relay settings** â€” Google, Cloudflare, custom IPv4 DNS, and configurable relay port.
-- **Live engine logs** â€” Gnirehtet output stays visible for troubleshooting.
-- **Device speed-test shortcut** â€” Opens Fast.com on an authorized Android device to verify real connectivity.
+- **Guided reverse tethering** — Start and stop the Gnirehtet relay from a desktop UI.
+- **ADB-aware device status** — Distinguishes ready, unauthorized, offline, no-access, and ADB-unavailable states.
+- **Connection state verification** — `Connected` requires both the PC relay process and an active Gnirehtet Android client.
+- **DNS and relay settings** — Google, Cloudflare, custom IPv4 DNS, and configurable relay port.
+- **Live engine logs** — Gnirehtet output stays visible for troubleshooting.
+- **Device speed-test shortcut** — Opens Fast.com on an authorized Android device to verify real connectivity.
 - **Privacy-safe diagnostics** — Checks runtime files, ADB response, device authorization, Android/API version, and Gnirehtet client state; copied reports mask device serials.
-- **Light and dark themes** â€” With English and Indonesian localization.
-- **Graceful cleanup** â€” Stopping tethering or choosing **Quit** from the tray attempts to clean up Gnirehtet clients and Wirebound-owned ADB reverse mappings. **Closing the window hides Wirebound to the tray** and does not end an active tethering session.
+- **Light and dark themes** — With English and Indonesian localization.
+- **Graceful cleanup** — Stopping tethering or choosing **Quit** from the tray attempts to clean up Gnirehtet clients and Wirebound-owned ADB reverse mappings. **Closing the window hides Wirebound to the tray** and does not end an active tethering session.
 
 Wirebound displays **real cumulative RX/TX byte counts** read from the Android VPN TUN interface through ADB. These totals are **not live transfer speeds or independently verified internet throughput**. Devices that do not expose readable counters display an unavailable state instead of invented numbers. Use **Speed Test** to check real internet access.
 
@@ -100,12 +98,12 @@ npm run package:check
 
 ## Architecture
 
-- `src/main` â€” Electron main process, window hardening, IPC validation, ADB and Gnirehtet services.
-- `src/preload` â€” Narrow context bridge exposed to the renderer.
-- `src/renderer` â€” React/Tailwind interface.
-- `src/shared` â€” Shared types, defaults, and settings normalization.
-- `scripts` â€” Reproducible runtime preparation.
-- `bin` â€” Generated runtime directory; only its documentation is tracked.
+- `src/main` — Electron main process, window hardening, IPC validation, ADB and Gnirehtet services.
+- `src/preload` — Narrow context bridge exposed to the renderer.
+- `src/renderer` — React/Tailwind interface.
+- `src/shared` — Shared types, defaults, and settings normalization.
+- `scripts` — Reproducible runtime preparation.
+- `bin` — Generated runtime directory; only its documentation is tracked.
 
 Wirebound is intentionally Windows-only today. The runtime paths, ADB distribution, packaging, and CI are designed and verified for Windows rather than advertising unsupported macOS/Linux builds.
 
